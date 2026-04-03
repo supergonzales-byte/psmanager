@@ -1839,21 +1839,80 @@ async function actionGroup(action, g) {
   const svgIcon = action === 'off' ? `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>` : `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`
   const throttle = parseInt(document.getElementById('inp-throttle').value) || 10
   showConfirm(svgIcon, `<strong>${label}</strong> les <strong>${hosts.length} poste(s)</strong> du groupe <strong>${g}</strong> ?`, async () => {
-    const res = await fetch('/api/action-bulk', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ action, targets: hosts.map(h => h.hostname), username, password, throttle })
-    }).then(r => r.json()).catch(() => ({ ok: false, results: [] }))
-    const results  = res.results || []
-    const okCount  = results.filter(r => r.ok).length
-    const offCount = results.filter(r => !r.ok).length
-    if (okCount === 0) {
-      showAlert(`⚠ Aucun poste du groupe <strong>${g}</strong> n'est joignable.`)
-    } else if (offCount === 0) {
-      showAlert(`✔ Commande ${label} envoyée à ${okCount} poste(s) du groupe ${g}.`)
-    } else {
-      showAlert(`✔ Commande ${label} envoyée à ${okCount} poste(s).<br>⚠ ${offCount} poste(s) injoignable(s).`)
+    document.getElementById('ag-modal-title').textContent      = action === 'off' ? '⏻ Extinction en cours...' : '↺ Redémarrage en cours...'
+    document.getElementById('ag-total').textContent            = hosts.length
+    document.getElementById('ag-ok').textContent               = '0'
+    document.getElementById('ag-err').textContent              = '0'
+    document.getElementById('ag-status').textContent           = 'En cours...'
+    document.getElementById('ag-status').style.color           = 'var(--orange)'
+    document.getElementById('ag-results').innerHTML            = ''
+    document.getElementById('ag-prog-fill').style.width        = '0%'
+    document.getElementById('ag-prog-pct').textContent         = '0%'
+    document.getElementById('ag-prog-text').textContent        = `0 / ${hosts.length}`
+    document.getElementById('ag-modal-close').disabled         = true
+    document.getElementById('action-group-modal').style.display = 'flex'
+
+    let token
+    try {
+      const init = await fetch('/api/action-bulk-init', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ action, targets: hosts.map(h => h.hostname), username, password, throttle })
+      })
+      const data = await init.json()
+      if (!data.token) throw new Error(data.error || 'Erreur init')
+      token = data.token
+    } catch(e) {
+      document.getElementById('ag-status').textContent = `Erreur : ${e.message}`
+      document.getElementById('ag-status').style.color = 'var(--red)'
+      document.getElementById('ag-modal-close').disabled = false
+      return
+    }
+
+    const es = new EventSource(`/api/action-bulk?token=${token}`)
+
+    es.onmessage = e => {
+      const { type, data } = JSON.parse(e.data)
+      if (type === 'result') {
+        document.getElementById('ag-ok').textContent  = data.ok
+        document.getElementById('ag-err').textContent = data.err
+        const pct = Math.round(data.done / data.total * 100)
+        document.getElementById('ag-prog-fill').style.width      = pct + '%'
+        document.getElementById('ag-prog-fill').style.background = data.err > 0 ? 'var(--orange)' : 'var(--accent)'
+        document.getElementById('ag-prog-pct').textContent       = pct + '%'
+        document.getElementById('ag-prog-text').textContent      = `${data.done} / ${data.total}`
+        const row = document.createElement('div')
+        row.className = 'run-host-row'
+        row.style.borderColor = data.success ? '#1a3a1a' : '#3a1a1a'
+        const dotColor = data.success ? 'var(--green)' : 'var(--red)'
+        row.innerHTML = `
+          <div style="min-width:14px;color:${dotColor};font-size:13px;">${data.success ? '✔' : '✖'}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="run-host-name">${data.hostname}</div>
+            <div class="run-host-status" style="color:${dotColor};">${data.success ? 'Commande envoyée' : escHtml(data.error || 'Erreur')}</div>
+          </div>`
+        document.getElementById('ag-results').appendChild(row)
+        document.getElementById('ag-results').scrollTop = 999999
+      }
+      if (type === 'done') {
+        const color = data.err === 0 ? 'var(--green)' : data.ok > 0 ? 'var(--orange)' : 'var(--red)'
+        document.getElementById('ag-status').textContent        = `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
+        document.getElementById('ag-status').style.color        = color
+        document.getElementById('ag-prog-fill').style.background = color
+        document.getElementById('ag-modal-close').disabled      = false
+        es.close()
+      }
+    }
+    es.onerror = () => {
+      document.getElementById('ag-status').textContent = 'Erreur de connexion'
+      document.getElementById('ag-status').style.color = 'var(--red)'
+      document.getElementById('ag-modal-close').disabled = false
+      es.close()
     }
   }, true)
+}
+
+function closeActionGroup() {
+  document.getElementById('action-group-modal').style.display = 'none'
 }
 
 function toggleGroupSelect(g) {
@@ -3991,6 +4050,36 @@ function settingsShutdownServer() {
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" style="width:120px;" onclick="closeRun()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODALE ACTION GROUPE (extinction / redémarrage) -->
+<div class="modal-overlay" id="action-group-modal" style="display:none;">
+  <div class="modal" style="width:600px;max-height:80vh;">
+    <div class="modal-header">
+      <span class="modal-title" id="ag-modal-title">⏻ Action en cours...</span>
+      <button class="modal-close" id="ag-modal-close" onclick="closeActionGroup()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="run-summary">
+        <span>Postes : <strong id="ag-total" style="color:var(--accent2)">0</strong></span>
+        <span>Succès : <strong class="s-ok" id="ag-ok">0</strong></span>
+        <span>Erreurs : <strong class="s-err" id="ag-err">0</strong></span>
+        <span id="ag-status" style="margin-left:auto;color:var(--orange);">En cours...</span>
+      </div>
+      <div class="prog-wrap" style="padding:0 0 12px;">
+        <div class="prog-label">
+          <span id="ag-prog-text">—</span>
+          <span id="ag-prog-pct">0%</span>
+        </div>
+        <div class="prog-bar-bg"><div class="prog-bar-fill" id="ag-prog-fill" style="width:0%"></div></div>
+      </div>
+      <div class="run-results" id="ag-results"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" style="width:120px;" onclick="closeActionGroup()">Fermer</button>
     </div>
   </div>
 </div>

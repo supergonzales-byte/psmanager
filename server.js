@@ -251,7 +251,8 @@ app.get('/api/scan', async (req, res) => {
 
 
 // ── Store temporaire sessions d'exécution (contourne limite URL GET)
-const runSessions = new Map()
+const runSessions    = new Map()
+const actionSessions = new Map()
 
 app.post('/api/run-init', (req, res) => {
     const { script, targets, username, password, throttle } = req.body
@@ -709,22 +710,44 @@ try { ${cmd}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.Exception.Mes
 })
 
 
-// ── OFF / RST en masse avec worker pool (throttle configurable)
-app.post('/api/action-bulk', async (req, res) => {
-    const { action, targets, username, password, throttle = 10 } = req.body
+// ── OFF / RST en masse — init token
+app.post('/api/action-bulk-init', (req, res) => {
+    const { action, targets, username, password, throttle } = req.body
     if (!action || !targets || !targets.length || !username || !password)
         return res.status(400).json({ error: 'Paramètres manquants' })
     if (!['off', 'rst'].includes(action))
-        return res.status(400).json({ error: 'Action non supportée en bulk' })
+        return res.status(400).json({ error: 'Action non supportée' })
+    const token = require('crypto').randomUUID()
+    actionSessions.set(token, { action, targets, username, password, throttle: parseInt(throttle) || 10 })
+    setTimeout(() => actionSessions.delete(token), 30000)
+    res.json({ token })
+})
+
+// ── OFF / RST en masse — SSE streaming
+app.get('/api/action-bulk', async (req, res) => {
+    const session = actionSessions.get(req.query.token)
+    if (!session) return res.status(400).json({ error: 'Token invalide ou expiré' })
+    actionSessions.delete(req.query.token)
+    const { action, targets, username, password, throttle } = session
+
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+
+    const send = (type, data) => {
+        if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type, data })}\n\n`)
+    }
 
     const { spawn } = require('child_process')
     const hostList = targets.map(h => (typeof h === 'string' ? h : h.hostname))
-    const results  = []
-    let index = 0
+    const total = hostList.length
+    let done = 0, okCount = 0, errCount = 0, index = 0
 
     const psCmd = action === 'off'
         ? (t) => `Stop-Computer -ComputerName '${t}' -Credential $cred -Force`
         : (t) => `Restart-Computer -ComputerName '${t}' -Credential $cred -Force`
+
+    send('start', { total, action })
 
     async function runOne(hostname) {
         const alive = await checkPort5985(hostname, 5000).catch(() => false)
@@ -753,14 +776,18 @@ try { ${psCmd(hostname)}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.E
     async function worker() {
         while (index < hostList.length) {
             const hostname = hostList[index++]
-            results.push(await runOne(hostname))
+            const result = await runOne(hostname)
+            done++
+            if (result.ok) okCount++; else errCount++
+            send('result', { done, total, ok: okCount, err: errCount, hostname, success: result.ok, error: result.error })
         }
     }
 
-    const workers = Array.from({ length: Math.min(parseInt(throttle) || 10, hostList.length) }, worker)
+    const workers = Array.from({ length: Math.min(throttle, hostList.length) }, worker)
     await Promise.all(workers)
 
-    res.json({ ok: true, results })
+    send('done', { ok: okCount, err: errCount, total })
+    res.end()
 })
 
 
