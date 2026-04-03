@@ -686,6 +686,7 @@ app.post('/api/action', async (req, res) => {
     if (!cmd) return res.status(400).json({ error: 'Action inconnue' })
 
     const psScript = `
+$ErrorActionPreference = 'Stop'
 $secPass = ConvertTo-SecureString '${password.replace(/'/g,"''")}' -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${username}', $secPass)
 try { ${cmd}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.Exception.Message)" }
@@ -702,10 +703,12 @@ try { ${cmd}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.Exception.Mes
         if (responded) return
         responded = true
         const out = stdout.trim()
+        const err = stderr.trim()
         if (out.startsWith('ERROR|')) res.json({ ok: false, error: out.replace('ERROR|','') })
         else if (out.startsWith('SESSION_OK|')) res.json({ ok: true, output: out.replace('SESSION_OK|','') })
-        else if (out === 'OK' || out === '') res.json({ ok: true, output: out })
-        else res.json({ ok: true, output: out })
+        else if (out === 'OK') res.json({ ok: true })
+        else if (err) res.json({ ok: false, error: err.split('\n').find(l => l.trim() && !l.startsWith('    +')) || err.split('\n')[0] })
+        else res.json({ ok: true })
     })
 })
 
@@ -753,21 +756,26 @@ app.get('/api/action-bulk', async (req, res) => {
         const alive = await checkPort5985(hostname, 5000).catch(() => false)
         if (!alive) return { hostname, ok: false, error: 'Poste éteint ou port 5985 fermé' }
         const psScript = `
+$ErrorActionPreference = 'Stop'
 $secPass = ConvertTo-SecureString '${password.replace(/'/g,"''")}' -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${username}', $secPass)
 try { ${psCmd(hostname)}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.Exception.Message)" }
 `
         return new Promise(resolve => {
             const ps = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psScript], { windowsHide: true })
-            let stdout = '', settled = false
+            let stdout = '', stderr = '', settled = false
             const timer = setTimeout(() => { if (!settled) { settled = true; ps.kill(); resolve({ hostname, ok: false, error: 'TIMEOUT' }) } }, 30000)
             ps.stdout.on('data', d => stdout += d.toString())
+            ps.stderr.on('data', d => stderr += d.toString())
             ps.on('close', () => {
                 clearTimeout(timer)
                 if (settled) return
                 settled = true
                 const out = stdout.trim()
+                const err = stderr.trim()
                 if (out.startsWith('ERROR|')) resolve({ hostname, ok: false, error: out.replace('ERROR|', '') })
+                else if (out === 'OK') resolve({ hostname, ok: true })
+                else if (err) resolve({ hostname, ok: false, error: err.split('\n').find(l => l.trim() && !l.startsWith('    +')) || err.split('\n')[0] })
                 else resolve({ hostname, ok: true })
             })
         })
