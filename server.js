@@ -686,6 +686,8 @@ app.post('/api/action', async (req, res) => {
     if (!cmd) return res.status(400).json({ error: 'Action inconnue' })
 
     const psScript = `
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $secPass = ConvertTo-SecureString '${password.replace(/'/g,"''")}' -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${username}', $secPass)
@@ -756,6 +758,8 @@ app.get('/api/action-bulk', async (req, res) => {
         const alive = await checkPort5985(hostname, 5000).catch(() => false)
         if (!alive) return { hostname, ok: false, error: 'Poste éteint ou port 5985 fermé' }
         const psScript = `
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
 $secPass = ConvertTo-SecureString '${password.replace(/'/g,"''")}' -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${username}', $secPass)
