@@ -676,8 +676,8 @@ app.post('/api/action', async (req, res) => {
     if (!alive) return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
 
     const psCommands = {
-        off: `Stop-Computer -ComputerName '${target}' -Credential $cred -Force`,
-        rst: `Restart-Computer -ComputerName '${target}' -Credential $cred -Force`,
+        off: `Invoke-Command -ComputerName '${target}' -Credential $cred -ScriptBlock { Stop-Computer -Force }`,
+        rst: `Invoke-Command -ComputerName '${target}' -Credential $cred -ScriptBlock { Restart-Computer -Force }`,
         msg: `Invoke-Command -ComputerName '${target}' -Credential $cred -ScriptBlock { msg * '${(message||'').replace(/'/g,"''")}' }`,
         session: `$r = Invoke-Command -ComputerName '${target}' -Credential $cred -ScriptBlock { (query user 2>&1) | Out-String } -ErrorAction Stop; Write-Output "SESSION_OK|$r"`,
     }
@@ -744,8 +744,8 @@ app.get('/api/action-bulk', async (req, res) => {
     let done = 0, okCount = 0, errCount = 0, index = 0
 
     const psCmd = action === 'off'
-        ? (t) => `Stop-Computer -ComputerName '${t}' -Credential $cred -Force`
-        : (t) => `Restart-Computer -ComputerName '${t}' -Credential $cred -Force`
+        ? (t) => `Invoke-Command -ComputerName '${t}' -Credential $cred -ScriptBlock { Stop-Computer -Force }`
+        : (t) => `Invoke-Command -ComputerName '${t}' -Credential $cred -ScriptBlock { Restart-Computer -Force }`
 
     send('start', { total, action })
 
@@ -2149,8 +2149,8 @@ async function executeScheduledTask(task) {
                     await runOneScript(scriptPath, hostname, hostname, username, password).catch(() => {})
             } else {
                 const psCmd = type === 'reboot'
-                    ? `Restart-Computer -ComputerName '${hostname}' -Credential $cred -Force`
-                    : `Stop-Computer -ComputerName '${hostname}' -Credential $cred -Force`
+                    ? `Invoke-Command -ComputerName '${hostname}' -Credential $cred -ScriptBlock { Restart-Computer -Force }`
+                    : `Invoke-Command -ComputerName '${hostname}' -Credential $cred -ScriptBlock { Stop-Computer -Force }`
                 const psScript = `
 $secPass = ConvertTo-SecureString '${password.replace(/'/g, "''")}' -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${username}', $secPass)
