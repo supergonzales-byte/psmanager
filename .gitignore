@@ -1,0 +1,5 @@
+node_modules/
+schedules.json
+users.json
+*.log
+.env
