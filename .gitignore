@@ -1,6 +1,7 @@
 node_modules/
 schedules.json
 users.json
+.schedule.key
 *.log
 *.zip
 .env
