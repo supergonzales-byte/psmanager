@@ -3885,6 +3885,7 @@ async function openSettingsModal() {
     document.getElementById('settings-new-pass').value = ''
     await _settingsLoadUsers()
     await _settingsLoadAutostart()
+    await _settingsLoadHttps()
 }
 
 function closeSettingsModal() {
@@ -3950,10 +3951,67 @@ function settingsRestartServer() {
         '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>',
         'Redémarrer le serveur PS-Manager ?',
         async () => {
-            await fetch('/api/admin/restart', { method:'POST' }).catch(() => {})
-            showAlert('Le serveur redémarre… Rechargez la page dans quelques secondes.')
+            const data = await fetch('/api/admin/restart', { method:'POST' }).then(r => r.json()).catch(() => ({}))
+            const newUrl = data.newUrl || window.location.origin
+            const sameUrl = newUrl === window.location.origin
+            showAlert(sameUrl
+                ? 'Le serveur redémarre… Rechargement automatique dans 5 secondes.'
+                : `Le serveur redémarre… Redirection vers ${newUrl} dans 5 secondes.`)
+            setTimeout(() => { window.location.href = newUrl }, 5000)
         }
     )
+}
+
+async function _settingsLoadHttps() {
+    const data  = await fetch('/api/admin/https-config').then(r => r.json()).catch(() => ({}))
+    const cbEnabled = document.getElementById('settings-https-enabled')
+    const badge     = document.getElementById('settings-https-cert-badge')
+    if (cbEnabled) cbEnabled.checked = !!data.httpsEnabled
+    if (badge) {
+        if (data.certExists) {
+            badge.textContent = 'Certificat présent'
+            badge.style.color = 'var(--green, #4caf96)'
+            badge.style.borderColor = 'var(--green, #4caf96)'
+        } else {
+            badge.textContent = 'Aucun certificat'
+            badge.style.color = 'var(--muted)'
+            badge.style.borderColor = 'var(--border)'
+        }
+    }
+}
+
+async function settingsToggleHttps() {
+    const msg         = document.getElementById('settings-https-msg')
+    const httpsEnabled = document.getElementById('settings-https-enabled').checked
+    msg.textContent = 'Sauvegarde…'
+    const data = await fetch('/api/admin/https-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ httpsEnabled })
+    }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }))
+    if (data.ok) {
+        msg.textContent = 'Sauvegardé — redémarrez le serveur pour appliquer.'
+        msg.style.color = 'var(--accent)'
+    } else {
+        msg.textContent = `Erreur : ${data.error}`
+        msg.style.color = 'var(--red)'
+    }
+}
+
+async function settingsRegenCert() {
+    const msg   = document.getElementById('settings-https-msg')
+    const badge = document.getElementById('settings-https-cert-badge')
+    msg.textContent = 'Regénération du certificat…'
+    msg.style.color = 'var(--muted)'
+    const data = await fetch('/api/admin/https-regen-cert', { method: 'POST' }).then(r => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau' }))
+    if (data.ok) {
+        msg.textContent = 'Certificat regénéré — redémarrez pour l\'appliquer.'
+        msg.style.color = 'var(--accent)'
+        if (badge) { badge.textContent = 'Certificat présent'; badge.style.color = 'var(--green, #4caf96)'; badge.style.borderColor = 'var(--green, #4caf96)' }
+    } else {
+        msg.textContent = `Erreur : ${data.error}`
+        msg.style.color = 'var(--red)'
+    }
 }
 
 function settingsShutdownServer() {
@@ -4602,6 +4660,26 @@ function settingsShutdownServer() {
           </span>
         </label>
         <div id="settings-autostart-msg" style="font-size:11px;color:var(--muted);margin-top:6px;margin-left:26px;"></div>
+      </div>
+
+      <!-- Séparateur -->
+      <div style="border-top:1px solid var(--border);"></div>
+
+      <!-- Section HTTPS -->
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;">Sécurité / HTTPS</div>
+
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;margin-bottom:10px;">
+          <input type="checkbox" id="settings-https-enabled" onchange="settingsToggleHttps()"
+            style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+          <span style="font-size:13px;color:var(--text2);">Activer HTTPS <span style="color:var(--muted);font-size:11px;">(port 443)</span></span>
+        </label>
+
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span id="settings-https-cert-badge" style="font-size:11px;padding:2px 8px;border-radius:4px;background:var(--card2);border:1px solid var(--border);color:var(--muted);">—</span>
+          <button onclick="settingsRegenCert()" style="padding:4px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;cursor:pointer;transition:all .2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">Regénérer le certificat</button>
+        </div>
+        <div id="settings-https-msg" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
       </div>
 
       <!-- Séparateur -->

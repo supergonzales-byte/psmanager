@@ -103,10 +103,33 @@ app.post('/api/auth', async (req, res) => {
 const { copyFileToHosts, collectDrivers, deployDrivers, listDirectory, downloadFile, deleteRemote, mkdirRemote, uploadToRemote } = require('./actions')
 
 const PORT        = 4000
+const HTTPS_PORT  = 443
 const PARC_FILE   = "C:\\ps-manager\\inventaire\\parc.txt"
 const SCRIPTS_DIR = "C:\\ps-manager\\scripts"
 const LOG_BASE    = "C:\\ps-manager\\inventaire\\Logiciels"
 const USERS_FILE  = path.join(__dirname, 'users.json')
+const CONFIG_FILE = path.join(__dirname, 'config.json')
+const SSL_DIR     = path.join(__dirname, 'ssl')
+const SSL_KEY     = path.join(SSL_DIR, 'key.pem')
+const SSL_CERT    = path.join(SSL_DIR, 'cert.pem')
+
+function loadConfig() {
+    try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) }
+    catch { return { httpsEnabled: false } }
+}
+function saveConfig(cfg) {
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2))
+}
+function ensureSslCert() {
+    if (!fs.existsSync(SSL_DIR)) fs.mkdirSync(SSL_DIR)
+    if (!fs.existsSync(SSL_KEY) || !fs.existsSync(SSL_CERT)) {
+        const selfsigned = require('selfsigned')
+        const attrs = [{ name: 'commonName', value: 'ps-manager' }]
+        const pems  = selfsigned.generate(attrs, { days: 3650, keySize: 2048 })
+        fs.writeFileSync(SSL_KEY,  pems.private)
+        fs.writeFileSync(SSL_CERT, pems.cert)
+    }
+}
 
 function loadUsers() {
     try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')) }
@@ -1922,7 +1945,11 @@ app.post('/api/admin/shutdown', (req, res) => {
 })
 
 app.post('/api/admin/restart', (req, res) => {
-    res.json({ ok: true })
+    const cfg      = loadConfig()
+    const proto    = cfg.httpsEnabled ? 'https' : 'http'
+    const newPort  = cfg.httpsEnabled ? HTTPS_PORT : PORT
+    const host     = req.hostname === '::1' ? 'localhost' : req.hostname
+    res.json({ ok: true, newUrl: `${proto}://${host}:${newPort}` })
     setTimeout(() => {
         const { spawn } = require('child_process')
         spawn(process.execPath, [path.join(__dirname, 'server.js')], {
@@ -1932,9 +1959,42 @@ app.post('/api/admin/restart', (req, res) => {
     }, 300)
 })
 
-// ── Serveur HTTP partagé Express + WebSocket (node-pty terminal PS)
-const http = require('http')
-const server = http.createServer(app)
+// ── Routes admin HTTPS ──
+app.get('/api/admin/https-config', (req, res) => {
+    const cfg = loadConfig()
+    res.json({ ...cfg, certExists: fs.existsSync(SSL_CERT) })
+})
+
+app.post('/api/admin/https-config', (req, res) => {
+    const cfg = loadConfig()
+    if (typeof req.body.httpsEnabled  === 'boolean') cfg.httpsEnabled  = req.body.httpsEnabled
+    saveConfig(cfg)
+    res.json({ ok: true })
+})
+
+app.post('/api/admin/https-regen-cert', (req, res) => {
+    try {
+        if (fs.existsSync(SSL_KEY))  fs.unlinkSync(SSL_KEY)
+        if (fs.existsSync(SSL_CERT)) fs.unlinkSync(SSL_CERT)
+        ensureSslCert()
+
+        res.json({ ok: true })
+    } catch (e) {
+        res.json({ ok: false, error: e.message })
+    }
+})
+
+// ── Serveur HTTP/HTTPS partagé Express + WebSocket (node-pty terminal PS)
+const http  = require('http')
+const https = require('https')
+const _cfg  = loadConfig()
+let server
+if (_cfg.httpsEnabled) {
+    ensureSslCert()
+    server = https.createServer({ key: fs.readFileSync(SSL_KEY), cert: fs.readFileSync(SSL_CERT) }, app)
+} else {
+    server = http.createServer(app)
+}
 
 try {
     const WebSocket = require('ws')
@@ -2241,6 +2301,8 @@ app.delete('/api/schedule/:id', (req, res) => {
     res.json({ ok: true })
 })
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`PS Manager Node — http://localhost:${PORT}`)
+const listenPort = _cfg.httpsEnabled ? HTTPS_PORT : PORT
+const listenProto = _cfg.httpsEnabled ? 'https' : 'http'
+server.listen(listenPort, '0.0.0.0', () => {
+    console.log(`PS Manager Node — ${listenProto}://localhost:${listenPort}`)
 })
