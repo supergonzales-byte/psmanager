@@ -1,0 +1,66 @@
+const express = require('express')
+const fs      = require('fs')
+const path    = require('path')
+const os      = require('os')
+const { multerFs }                                                        = require('../lib/multer')
+const { listDirectory, downloadFile, deleteRemote, mkdirRemote, uploadToRemote } = require('../actions')
+
+const router = express.Router()
+
+router.get('/fs/list', async (req, res) => {
+    const { hostname, username, password, path: remotePath } = req.query
+    if (!hostname || !username || !password || !remotePath)
+        return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+    const result = await listDirectory({ hostname, username, password, remotePath })
+    res.json(result)
+})
+
+router.get('/fs/download', async (req, res) => {
+    const { hostname, username, password, path: remotePath } = req.query
+    if (!hostname || !username || !password || !remotePath)
+        return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+
+    const result = await downloadFile({ hostname, username, password, remotePath })
+    if (!result.ok) return res.status(500).json({ ok: false, error: result.error })
+
+    const encoded = encodeURIComponent(result.fileName)
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encoded}`)
+    res.setHeader('Content-Type', 'application/octet-stream')
+    const stream = fs.createReadStream(result.localPath)
+    stream.pipe(res)
+    stream.on('end',   () => { try { fs.unlinkSync(result.localPath) } catch {} })
+    stream.on('error', () => { try { fs.unlinkSync(result.localPath) } catch {} })
+})
+
+router.post('/fs/upload', multerFs.single('file'), async (req, res) => {
+    const { hostname, username, password, remotePath } = req.body
+    if (!req.file || !hostname || !username || !password || !remotePath)
+        return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+
+    const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8')
+    const tmpOriginal  = path.join(os.tmpdir(), `fsul_${Date.now()}_${req.file.filename}`)
+    try { fs.renameSync(req.file.path, tmpOriginal) }
+    catch { fs.copyFileSync(req.file.path, tmpOriginal); fs.unlinkSync(req.file.path) }
+
+    const result = await uploadToRemote({ hostname, username, password, localPath: tmpOriginal, remotePath, fileName: originalName })
+    try { fs.unlinkSync(tmpOriginal) } catch {}
+    res.json(result)
+})
+
+router.delete('/fs/delete', async (req, res) => {
+    const { hostname, username, password, path: remotePath, isDir } = req.query
+    if (!hostname || !username || !password || !remotePath)
+        return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+    const result = await deleteRemote({ hostname, username, password, remotePath, isDir: isDir === 'true' })
+    res.json(result)
+})
+
+router.post('/fs/mkdir', async (req, res) => {
+    const { hostname, username, password, remotePath } = req.body
+    if (!hostname || !username || !password || !remotePath)
+        return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+    const result = await mkdirRemote({ hostname, username, password, remotePath })
+    res.json(result)
+})
+
+module.exports = router

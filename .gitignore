@@ -1,0 +1,10 @@
+node_modules/
+schedules.json
+users.json
+config.json
+installer-args.json
+ssl/
+.schedule.key
+*.log
+*.zip
+.env

@@ -1,0 +1,185 @@
+const express = require('express')
+const fs      = require('fs')
+const { PARC_FILE, SCRIPTS_DIR, LOG_BASE } = require('../lib/constants')
+const { getNetworkInterfaces, getNetworkRange, scanNetwork, checkPort5985 } = require('../scan')
+const { runInventory } = require('../inventory')
+const { sendWol }      = require('../wol')
+
+const router = express.Router()
+
+router.get('/parc', (req, res) => {
+    try {
+        if (!fs.existsSync(PARC_FILE)) return res.json([])
+        const lines = fs.readFileSync(PARC_FILE, 'utf-8')
+            .split('\n').map(l => l.trim()).filter(l => l)
+        const hosts = lines.map(line => {
+            const p = line.split('|')
+            return {
+                hostname    : p[0]  || '',
+                ip          : p[1]  || '',
+                fabricant   : p[2]  || '',
+                modele      : p[3]  || '',
+                serial      : p[4]  || '',
+                os          : p[5]  || '',
+                ram         : p[6]  || '',
+                disque      : p[7]  || '',
+                typeDisque  : p[8]  || '',
+                gpu         : p[9]  || '',
+                date        : p[10] || '',
+                bios        : p[11] || '',
+                mac         : p[12] || '',
+                typeRam     : p[13] || '',
+                cpu         : p[14] || '',
+                installDate : p[15] || '',
+            }
+        })
+        res.json(hosts)
+    } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+router.get('/scripts', (req, res) => {
+    try {
+        if (!fs.existsSync(SCRIPTS_DIR)) return res.json([])
+        res.json(fs.readdirSync(SCRIPTS_DIR).filter(f => f.endsWith('.ps1')))
+    } catch { res.json([]) }
+})
+
+router.get('/interfaces', (req, res) => {
+    res.json(getNetworkInterfaces())
+})
+
+router.get('/ping', (req, res) => {
+    const ip = req.query.ip
+    if (!ip) return res.json({ alive: false })
+    checkPort5985(ip, 1000).then(alive => res.json({ alive })).catch(() => res.json({ alive: false }))
+})
+
+router.post('/ping-batch', async (req, res) => {
+    const { hosts } = req.body
+    if (!hosts || !hosts.length) return res.json({ results: [] })
+
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+
+    const send = data => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`) }
+
+    let index = 0
+    async function worker() {
+        while (index < hosts.length) {
+            const i      = index++
+            const target = hosts[i].ip || hosts[i].hostname
+            const alive  = await checkPort5985(target, 1000).catch(() => false)
+            send({ hostname: hosts[i].hostname, alive })
+        }
+    }
+    const workers = Array.from({ length: Math.min(50, hosts.length) }, worker)
+    await Promise.all(workers)
+    send({ done: true })
+    res.end()
+})
+
+router.get('/scan', async (req, res) => {
+    const { ip, prefix, throttle = 50, doInventory, excludeKnown, username, password } = req.query
+    if (!ip || !prefix) return res.status(400).json({ error: 'ip et prefix requis' })
+
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+
+    const send = (type, data) => {
+        if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type, data })}\n\n`)
+    }
+
+    const ips   = getNetworkRange(ip, parseInt(prefix))
+    const total = ips.length
+
+    send('phase', { phase: 1, label: `Phase 1 — Scan de ${total} adresses`, total })
+
+    const found = await scanNetwork(ips, parseInt(throttle), (scanned, total, foundCount, newIp) => {
+        if (newIp) send('found', { ip: newIp })
+        if (scanned % 25 === 0 || scanned === total)
+            send('progress', { scanned, total, found: foundCount, pct: Math.round(scanned / total * 100) })
+    })
+
+    send('phase1done', { found: found.length, total })
+
+    if (!found.length) {
+        send('done', { ok: 0, err: 0, message: 'Aucun hote WinRM detecte.' })
+        return res.end()
+    }
+
+    if (!doInventory || doInventory === 'false') {
+        send('done', { ok: 0, err: 0, message: `${found.length} hote(s) detecte(s). Inventaire non demande.` })
+        return res.end()
+    }
+
+    let toInventory  = found
+    let skippedCount = 0
+    if (excludeKnown === 'true') {
+        const knownIps = new Set()
+        try {
+            if (fs.existsSync(PARC_FILE))
+                fs.readFileSync(PARC_FILE, 'utf-8').split('\n')
+                    .map(l => l.trim()).filter(l => l)
+                    .forEach(line => { const p = line.split('|'); if (p[1]) knownIps.add(p[1].trim()) })
+        } catch {}
+        toInventory  = found.filter(ip => !knownIps.has(ip))
+        skippedCount = found.length - toInventory.length
+    }
+
+    if (!toInventory.length) {
+        send('done', { ok: 0, err: 0, message: `Tous les postes détectés sont déjà inventoriés (${skippedCount} exclus).` })
+        return res.end()
+    }
+
+    const skipLabel = skippedCount > 0 ? ` — ${skippedCount} déjà inventorié(s) exclus` : ''
+    send('phase', { phase: 2, label: `Phase 2 — Inventaire WinRM sur ${toInventory.length} poste(s)${skipLabel}`, total: toInventory.length })
+
+    const { ok, err } = await runInventory({
+        targets    : toInventory,
+        username, password,
+        parcFile   : PARC_FILE,
+        logBaseDir : LOG_BASE,
+        concurrency: parseInt(throttle),
+        onProgress : ({ done, total, ok, err, result }) => {
+            send('inv_progress', { done, total, ok, err, pct: Math.round(done / total * 100) })
+            if (result.ok) send('inv_ok',  { display: result.display })
+            else           send('inv_err', { addr: result.addr, error: result.error })
+        }
+    })
+
+    send('done', { ok, err, message: `Termine — OK:${ok}  ERR:${err}` })
+    res.end()
+})
+
+router.post('/wol', async (req, res) => {
+    const { hostnames } = req.body
+    if (!hostnames || !hostnames.length)
+        return res.status(400).json({ error: 'Aucun poste fourni' })
+
+    let parcLines = []
+    try {
+        parcLines = fs.readFileSync(PARC_FILE, 'utf-8')
+            .split('\n').map(l => l.trim()).filter(l => l)
+    } catch {}
+
+    const results = []
+    for (const hostname of hostnames) {
+        const line = parcLines.find(l => l.startsWith(hostname + '|'))
+        if (!line) { results.push({ hostname, ok: false, error: 'Poste introuvable dans parc.txt' }); continue }
+        const parts = line.split('|')
+        const ip    = parts[1]  || ''
+        const mac   = parts[12] || ''
+        if (!mac) { results.push({ hostname, ok: false, error: 'Adresse MAC absente dans parc.txt' }); continue }
+        try {
+            const usedIface = await sendWol(mac, ip || null)
+            results.push({ hostname, ok: true, mac, iface: usedIface || '0.0.0.0' })
+        } catch(e) {
+            results.push({ hostname, ok: false, error: e.message })
+        }
+    }
+    res.json(results)
+})
+
+module.exports = router

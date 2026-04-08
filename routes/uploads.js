@@ -1,0 +1,67 @@
+const express = require('express')
+const fs      = require('fs')
+const path    = require('path')
+const { upload }                          = require('../lib/multer')
+const { SCRIPTS_DIR, INSTALLERS_DIR, INSTALLER_ARGS_FILE } = require('../lib/constants')
+
+const router = express.Router()
+
+router.post('/scripts/upload', upload.single('file'), (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ ok: false, error: 'Fichier manquant' })
+        if (!req.file.originalname.endsWith('.ps1'))
+            return res.status(400).json({ ok: false, error: 'Seuls les fichiers .ps1 sont acceptés' })
+        if (!fs.existsSync(SCRIPTS_DIR)) fs.mkdirSync(SCRIPTS_DIR, { recursive: true })
+        const dest = path.join(SCRIPTS_DIR, req.file.originalname)
+        fs.renameSync(req.file.path, dest)
+        res.json({ ok: true, name: req.file.originalname })
+    } catch(e) {
+        res.status(500).json({ ok: false, error: e.message })
+    }
+})
+
+router.get('/installers', (req, res) => {
+    try {
+        if (!fs.existsSync(INSTALLERS_DIR)) return res.json([])
+        res.json(fs.readdirSync(INSTALLERS_DIR).filter(f => /\.(exe|msi)$/i.test(f)))
+    } catch { res.json([]) }
+})
+
+router.post('/installers/upload', upload.single('file'), (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ ok: false, error: 'Fichier manquant' })
+        const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8')
+        if (!/\.(exe|msi)$/i.test(originalName))
+            return res.status(400).json({ ok: false, error: 'Seuls les fichiers .exe et .msi sont acceptés' })
+        if (!fs.existsSync(INSTALLERS_DIR)) fs.mkdirSync(INSTALLERS_DIR, { recursive: true })
+        const dest = path.join(INSTALLERS_DIR, originalName)
+        try { fs.renameSync(req.file.path, dest) }
+        catch { fs.copyFileSync(req.file.path, dest); fs.unlinkSync(req.file.path) }
+        res.json({ ok: true, name: originalName })
+    } catch(e) {
+        res.status(500).json({ ok: false, error: e.message })
+    }
+})
+
+router.get('/installer-args', (req, res) => {
+    try {
+        if (!fs.existsSync(INSTALLER_ARGS_FILE)) return res.json({})
+        res.json(JSON.parse(fs.readFileSync(INSTALLER_ARGS_FILE, 'utf8')))
+    } catch { res.json({}) }
+})
+
+router.post('/installer-args', (req, res) => {
+    const { name, args } = req.body
+    if (!name) return res.status(400).json({ ok: false, error: 'Nom requis' })
+    try {
+        let data = {}
+        try { data = JSON.parse(fs.readFileSync(INSTALLER_ARGS_FILE, 'utf8')) } catch {}
+        data[name] = args || ''
+        fs.writeFileSync(INSTALLER_ARGS_FILE, JSON.stringify(data, null, 2))
+        res.json({ ok: true })
+    } catch(e) {
+        res.status(500).json({ ok: false, error: e.message })
+    }
+})
+
+module.exports = router
