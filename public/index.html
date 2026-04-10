@@ -348,7 +348,8 @@ header {
 .modal-title { font-family:var(--sans); font-size:15px; font-weight:700; color:var(--text); }
 .modal-close { width:28px; height:28px; border-radius:6px; border:1.5px solid var(--border); background:var(--surface); color:var(--text2); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all .15s; }
 .modal-close:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-l2); }
-.modal-close:disabled { opacity:.3; cursor:not-allowed !important; pointer-events:none; }
+.modal-close:disabled,
+.modal-close.running  { opacity:.45; cursor:not-allowed !important; filter: grayscale(.4); }
 .modal-body { padding:18px 22px; overflow-y:auto; flex:1; }
 .modal-body::-webkit-scrollbar { width:4px; }
 .modal-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
@@ -1742,7 +1743,14 @@ function showSessionModal(hostname, rawOutput, errorMsg) {
 let lldpRunning = false
 
 function closeLldp() {
-  if (lldpRunning) return
+  if (lldpRunning) {
+    showConfirm('⚠️', 'Capture LLDP en cours (~30s). Voulez-vous annuler ?', () => {
+      lldpRunning = false
+      setModalClosable('lldp-modal', true)
+      document.getElementById('lldp-modal').style.display = 'none'
+    }, true)
+    return
+  }
   document.getElementById('lldp-modal').style.display = 'none'
 }
 
@@ -2110,7 +2118,15 @@ async function _saveInstallerArgs(name, args) {
 }
 
 function closeInstallModal() {
-  if (installRunning) return
+  if (installRunning) {
+    showConfirm('⚠️', 'Un déploiement est en cours. Voulez-vous l\'annuler ?', () => {
+      installRunning = false
+      setModalClosable('install-modal', true)
+      document.getElementById('inst-modal-close').disabled = false
+      document.getElementById('install-modal').style.display = 'none'
+    }, true)
+    return
+  }
   document.getElementById('install-modal').style.display = 'none'
 }
 
@@ -2694,9 +2710,18 @@ function clearBasket() {
 
 // ══ EXÉCUTION SCRIPT ══
 let runRunning = false
+let runEs      = null
 
 function closeRun() {
-  if (runRunning) return
+  if (runRunning) {
+    showConfirm('⚠️', 'Une exécution est en cours. Voulez-vous l\'annuler ?', () => {
+      if (runEs) { runEs.close(); runEs = null }
+      runRunning = false
+      setModalClosable('run-modal', true)
+      document.getElementById('run-modal').style.display = 'none'
+    }, true)
+    return
+  }
   document.getElementById('run-modal').style.display = 'none'
 }
 
@@ -2745,7 +2770,8 @@ async function runScript() {
     setModalClosable('run-modal', true)
     return
   }
-  const es = new EventSource(`/api/run?token=${token}`)
+  runEs = new EventSource(`/api/run?token=${token}`)
+  const es = runEs
 
   es.onmessage = e => {
     const { type, data } = JSON.parse(e.data)
@@ -3613,6 +3639,7 @@ async function sendWolAll() {
 
 // ══ SCAN ══
 let scanRunning  = false
+let scanEs       = null
 let scanInterfaces = []
 
 async function openScan() {
@@ -3639,7 +3666,17 @@ async function openScan() {
 }
 
 function closeScan() {
-  if (scanRunning) return
+  if (scanRunning) {
+    showConfirm('⚠️', 'Un scan est en cours. Voulez-vous l\'annuler ?', () => {
+      if (scanEs) { scanEs.close(); scanEs = null }
+      scanRunning = false
+      document.getElementById('scan-btn').disabled = false
+      setModalClosable('scan-modal', true)
+      document.getElementById('scan-modal').style.display = 'none'
+      scanLog('— Scan annulé par l\'utilisateur —', '#f59e0b')
+    }, true)
+    return
+  }
   document.getElementById('scan-modal').style.display = 'none'
 }
 
@@ -3685,7 +3722,8 @@ async function startScan() {
     username, password
   })
 
-  const es = new EventSource(`/api/scan?${params}`)
+  scanEs = new EventSource(`/api/scan?${params}`)
+  const es = scanEs
 
   es.onmessage = e => {
     const { type, data } = JSON.parse(e.data)
@@ -3753,7 +3791,7 @@ async function startScan() {
 function setModalClosable(modalId, canClose) {
   const m = document.getElementById(modalId)
   if (!m) return
-  m.querySelectorAll('.modal-close').forEach(b => b.disabled = !canClose)
+  m.querySelectorAll('.modal-close').forEach(b => b.classList.toggle('running', !canClose))
 }
 
 // ══ THEME ══
