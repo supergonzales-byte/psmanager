@@ -7,6 +7,13 @@ const { copyFileToHosts, collectDrivers, deployDrivers } = require('../actions')
 
 const router = express.Router()
 
+let _driversCancelled = false
+
+router.post('/drivers-cancel', (req, res) => {
+    _driversCancelled = true
+    res.json({ ok: true })
+})
+
 router.post('/copy-files', upload.array('files', 500), async (req, res) => {
     const { targets, destination, username, password, concurrency, relativePaths } = req.body
     if (!req.files?.length || !targets || !username || !password)
@@ -28,8 +35,12 @@ router.post('/copy-files', upload.array('files', 500), async (req, res) => {
 
     send('start', { total: hostList.length, fileCount: req.files.length, destination: dest })
 
+    _driversCancelled = false
+    const isCancelled = () => _driversCancelled
+
     let totalOk = 0, totalErr = 0
     for (let i = 0; i < req.files.length; i++) {
+        if (isCancelled()) { try { fs.unlinkSync(req.files[i].path) } catch {} ; break }
         const file         = req.files[i]
         const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8')
         const relPath      = rPaths[i] ? rPaths[i] : originalName
@@ -43,6 +54,7 @@ router.post('/copy-files', upload.array('files', 500), async (req, res) => {
                 targets    : hostList,
                 username, password,
                 concurrency: parseInt(concurrency) || 5,
+                isCancelled,
                 onProgress : ({ done, total, ok, err, result }) => {
                     send('progress', { done, total, ok, err, pct: Math.round(done / total * 100) })
                     if (result.ok) send('ok',  { hostname: result.hostname, path: result.path })
@@ -106,12 +118,16 @@ router.post('/deploy-drivers', async (req, res) => {
     const send = (type, data) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type, data })}\n\n`) }
     send('start', { total: hostList.length, modele, modelePath })
 
+    _driversCancelled = false
+    const isCancelled = () => _driversCancelled
+
     try {
         const { ok, err } = await deployDrivers({
             modelePath,
             targets    : hostList,
             username, password,
             concurrency: parseInt(concurrency) || 3,
+            isCancelled,
             onProgress : ({ done, total, ok, err, result, fileProgress }) => {
                 if (fileProgress) send('file_progress', fileProgress)
                 else {

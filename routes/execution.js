@@ -6,7 +6,13 @@ const { runOneScript } = require('../lib/remote-execution')
 
 const router = express.Router()
 
-const runSessions = new Map()
+const runSessions   = new Map()
+const runCancelled  = new Map()
+
+router.post('/run-cancel', (req, res) => {
+    if (req.query.token) runCancelled.set(req.query.token, true)
+    res.json({ ok: true })
+})
 
 router.post('/run-init', (req, res) => {
     const { script, targets, username, password, throttle } = req.body
@@ -19,11 +25,12 @@ router.post('/run-init', (req, res) => {
 })
 
 router.get('/run', async (req, res) => {
+    const token = req.query.token
     let script, targets, username, password, throttle
-    if (req.query.token) {
-        const session = runSessions.get(req.query.token)
+    if (token) {
+        const session = runSessions.get(token)
         if (!session) return res.status(400).json({ error: 'Token invalide ou expiré' })
-        runSessions.delete(req.query.token)
+        runSessions.delete(token)
         ;({ script, targets, username, password, throttle } = session)
     } else {
         ;({ script, targets, username, password, throttle = 10 } = req.query)
@@ -49,10 +56,13 @@ router.get('/run', async (req, res) => {
 
     send('start', { total, script })
 
+    if (token) runCancelled.delete(token)
+    const isCancelled = () => token ? runCancelled.get(token) === true : false
+
     let authFailed = false
 
     async function worker() {
-        while (index < hostList.length && !authFailed) {
+        while (index < hostList.length && !authFailed && !isCancelled()) {
             const hostname = hostList[index++]
             const result = await runOneScript(scriptPath, hostname, hostname, username, password)
             done++
@@ -65,6 +75,7 @@ router.get('/run', async (req, res) => {
 
     const workers = Array.from({ length: Math.min(parseInt(throttle), hostList.length) }, worker)
     await Promise.all(workers)
+    if (token) runCancelled.delete(token)
     send('done', { ok: okCount, err: errCount, total })
     res.end()
 })

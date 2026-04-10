@@ -2006,6 +2006,9 @@ async function uploadScript(input) {
 let _installerArgs     = {}   // { "vlc.exe": "/S", ... } — chargé depuis le serveur
 let _selectedInstaller = null // nom du fichier sélectionné
 let installRunning     = false
+let installEs          = null
+let installToken       = null
+let installCancelPath  = null
 
 async function loadInstallers() {
   try {
@@ -2121,6 +2124,10 @@ async function _saveInstallerArgs(name, args) {
 function closeInstallModal() {
   if (installRunning) {
     showConfirm('⚠️', 'Un déploiement est en cours. Voulez-vous l\'annuler ?', () => {
+      if (installToken && installCancelPath)
+        fetch(`${installCancelPath}?token=${installToken}`, {method:'POST'}).catch(()=>{})
+      if (installEs) { installEs.close(); installEs = null }
+      installToken = null
       installRunning = false
       setModalClosable('install-modal', true)
       document.getElementById('inst-modal-close').disabled = false
@@ -2182,7 +2189,10 @@ async function runInstallBasket(selected, username, password) {
     return
   }
 
+  installToken = token
+  installCancelPath = '/api/install-cancel'
   const es = new EventSource(`/api/install?token=${token}`)
+  installEs = es
 
   es.onmessage = e => {
     const { type, data } = JSON.parse(e.data)
@@ -2218,8 +2228,9 @@ async function runInstallBasket(selected, username, password) {
       document.getElementById('inst-status').style.color = color
       document.getElementById('inst-prog-fill').style.background = color
       document.getElementById('inst-modal-close').disabled = false
-    setModalClosable('install-modal', true)
+      setModalClosable('install-modal', true)
       es.close()
+      installEs = null; installToken = null
       installRunning = false
     }
   }
@@ -2230,6 +2241,7 @@ async function runInstallBasket(selected, username, password) {
     document.getElementById('inst-modal-close').disabled = false
     setModalClosable('install-modal', true)
     es.close()
+    installEs = null; installToken = null
     installRunning = false
   }
 }
@@ -2300,7 +2312,10 @@ async function runVeyonDeploy(selected, username, password) {
     return
   }
 
+  installToken = token
+  installCancelPath = '/api/veyon-cancel'
   const es = new EventSource(`/api/veyon-deploy?token=${token}`)
+  installEs = es
 
   es.onmessage = e => {
     const { type, data } = JSON.parse(e.data)
@@ -2336,8 +2351,9 @@ async function runVeyonDeploy(selected, username, password) {
       document.getElementById('inst-status').style.color = color
       document.getElementById('inst-prog-fill').style.background = color
       document.getElementById('inst-modal-close').disabled = false
-    setModalClosable('install-modal', true)
+      setModalClosable('install-modal', true)
       es.close()
+      installEs = null; installToken = null
       installRunning = false
     }
   }
@@ -2348,6 +2364,7 @@ async function runVeyonDeploy(selected, username, password) {
     document.getElementById('inst-modal-close').disabled = false
     setModalClosable('install-modal', true)
     es.close()
+    installEs = null; installToken = null
     installRunning = false
   }
 }
@@ -2552,8 +2569,9 @@ async function actionGroup(action, g) {
     document.getElementById('ag-prog-fill').style.width        = '0%'
     document.getElementById('ag-prog-pct').textContent         = '0%'
     document.getElementById('ag-prog-text').textContent        = `0 / ${hosts.length}`
-    document.getElementById('ag-modal-close').disabled         = true
+    document.getElementById('ag-modal-close').classList.add('running')
     document.getElementById('action-group-modal').style.display = 'flex'
+    agRunning = true
 
     let token
     try {
@@ -2567,11 +2585,14 @@ async function actionGroup(action, g) {
     } catch(e) {
       document.getElementById('ag-status').textContent = `Erreur : ${e.message}`
       document.getElementById('ag-status').style.color = 'var(--red)'
-      document.getElementById('ag-modal-close').disabled = false
+      document.getElementById('ag-modal-close').classList.remove('running')
+      agRunning = false
       return
     }
 
-    const es = new EventSource(`/api/action-bulk?token=${token}`)
+    agToken = token
+    agEs = new EventSource(`/api/action-bulk?token=${token}`)
+    const es = agEs
 
     es.onmessage = e => {
       const { type, data } = JSON.parse(e.data)
@@ -2601,21 +2622,37 @@ async function actionGroup(action, g) {
         document.getElementById('ag-status').textContent        = `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
         document.getElementById('ag-status').style.color        = color
         document.getElementById('ag-prog-fill').style.background = color
-        document.getElementById('ag-modal-close').disabled      = false
+        document.getElementById('ag-modal-close').classList.remove('running')
+        agRunning = false; agEs = null; agToken = null
         es.close()
       }
     }
     es.onerror = () => {
       document.getElementById('ag-status').textContent = 'Erreur de connexion'
       document.getElementById('ag-status').style.color = 'var(--red)'
-      document.getElementById('ag-modal-close').disabled = false
+      document.getElementById('ag-modal-close').classList.remove('running')
+      agRunning = false; agEs = null; agToken = null
       es.close()
     }
   }, true)
 }
 
+let agEs      = null
+let agToken   = null
+let agRunning = false
+
 function closeActionGroup() {
-  if (document.getElementById('ag-modal-close').disabled) return
+  if (agRunning) {
+    showConfirm('⚠️', 'Une action est en cours. Voulez-vous l\'annuler ?', () => {
+      if (agToken) fetch(`/api/action-bulk-cancel?token=${agToken}`, {method:'POST'}).catch(()=>{})
+      if (agEs) { agEs.close(); agEs = null }
+      agToken = null
+      agRunning = false
+      document.getElementById('ag-modal-close').classList.remove('running')
+      document.getElementById('action-group-modal').style.display = 'none'
+    }, true)
+    return
+  }
   document.getElementById('action-group-modal').style.display = 'none'
 }
 
@@ -2712,11 +2749,14 @@ function clearBasket() {
 // ══ EXÉCUTION SCRIPT ══
 let runRunning = false
 let runEs      = null
+let runToken   = null
 
 function closeRun() {
   if (runRunning) {
     showConfirm('⚠️', 'Une exécution est en cours. Voulez-vous l\'annuler ?', () => {
+      if (runToken) { fetch(`/api/run-cancel?token=${runToken}`, {method:'POST'}).catch(()=>{}) }
       if (runEs) { runEs.close(); runEs = null }
+      runToken = null
       runRunning = false
       setModalClosable('run-modal', true)
       document.getElementById('run-modal').style.display = 'none'
@@ -2771,6 +2811,7 @@ async function runScript() {
     setModalClosable('run-modal', true)
     return
   }
+  runToken = token
   runEs = new EventSource(`/api/run?token=${token}`)
   const es = runEs
 
@@ -2812,6 +2853,7 @@ async function runScript() {
       document.getElementById('rs-status').style.color = color
       document.getElementById('run-prog-fill').style.background = color
       es.close()
+      runToken = null
       runRunning = false
       setModalClosable('run-modal', true)
     }
@@ -2821,6 +2863,7 @@ async function runScript() {
     document.getElementById('rs-status').textContent = 'Erreur de connexion'
     document.getElementById('rs-status').style.color = 'var(--red)'
     es.close()
+    runToken = null
     runRunning = false
     setModalClosable('run-modal', true)
   }
@@ -2854,8 +2897,9 @@ async function actionBasket(action) {
     document.getElementById('ag-prog-fill').style.width         = '0%'
     document.getElementById('ag-prog-pct').textContent          = '0%'
     document.getElementById('ag-prog-text').textContent         = `0 / ${hosts.length}`
-    document.getElementById('ag-modal-close').disabled          = true
+    document.getElementById('ag-modal-close').classList.add('running')
     document.getElementById('action-group-modal').style.display = 'flex'
+    agRunning = true
     let token
     try {
       const init = await fetch('/api/action-bulk-init', {
@@ -2868,10 +2912,13 @@ async function actionBasket(action) {
     } catch(e) {
       document.getElementById('ag-status').textContent = `Erreur : ${e.message}`
       document.getElementById('ag-status').style.color = 'var(--red)'
-      document.getElementById('ag-modal-close').disabled = false
+      document.getElementById('ag-modal-close').classList.remove('running')
+      agRunning = false
       return
     }
-    const es = new EventSource(`/api/action-bulk?token=${token}`)
+    agToken = token
+    agEs = new EventSource(`/api/action-bulk?token=${token}`)
+    const es = agEs
     es.onmessage = e => {
       const { type, data } = JSON.parse(e.data)
       if (type === 'result') {
@@ -2889,14 +2936,16 @@ async function actionBasket(action) {
       } else if (type === 'done') {
         document.getElementById('ag-status').textContent = data.err === 0 ? 'Terminé' : `Terminé avec ${data.err} erreur(s)`
         document.getElementById('ag-status').style.color = data.err === 0 ? 'var(--green)' : 'var(--orange)'
-        document.getElementById('ag-modal-close').disabled = false
+        document.getElementById('ag-modal-close').classList.remove('running')
+        agRunning = false; agEs = null; agToken = null
         es.close()
       }
     }
     es.onerror = () => {
       document.getElementById('ag-status').textContent = 'Erreur de connexion'
       document.getElementById('ag-status').style.color = 'var(--red)'
-      document.getElementById('ag-modal-close').disabled = false
+      document.getElementById('ag-modal-close').classList.remove('running')
+      agRunning = false; agEs = null; agToken = null
       es.close()
     }
   })
@@ -2929,7 +2978,8 @@ function actionLog(msg, color) {
     log.scrollTop = log.scrollHeight
 }
 
-let actionRunning = false
+let actionRunning     = false
+let _actionAbortCtrl  = null
 
 function openActionModal(title) {
     actionRunning = true
@@ -2951,6 +3001,11 @@ function closeActionModal() {
 function dismissActionModal() {
     if (actionRunning) {
         showConfirm('⚠️', 'Une action est en cours. Voulez-vous l\'annuler ?', () => {
+            if (_actionAbortCtrl) {
+                fetch('/api/drivers-cancel', {method:'POST'}).catch(()=>{})
+                _actionAbortCtrl.abort()
+                _actionAbortCtrl = null
+            }
             actionRunning = false
             document.getElementById('action-modal-x').classList.remove('running')
             document.getElementById('action-modal').style.display = 'none'
@@ -3335,42 +3390,49 @@ async function runCopyFiles(selected, username, password) {
     formData.append('password', password)
     formData.append('concurrency', '5')
 
-    const res     = await fetch('/api/copy-files', { method: 'POST', body: formData })
-    const reader  = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
+    _actionAbortCtrl = new AbortController()
+    try {
+        const res     = await fetch('/api/copy-files', { method: 'POST', body: formData, signal: _actionAbortCtrl.signal })
+        const reader  = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
 
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        const parts = buf.split('\n\n')
-        buf = parts.pop()
-        for (const part of parts) {
-            const line = part.replace(/^data: /, '')
-            if (!line) continue
-            try {
-                const { type, data } = JSON.parse(line)
-                if (type === 'start')
-                    actionLog(`📂 ${data.fileCount} fichier(s) → ${data.destination}`, 'var(--muted)')
-                if (type === 'file_start')
-                    actionLog(`📄 [${data.fileIndex}/${data.fileCount}] ${data.fileName}`, '#60a5fa')
-                if (type === 'progress') {
-                    document.getElementById('action-modal-status').textContent = `${data.done}/${data.total} — ✔ ${data.ok}  ✖ ${data.err}`
-                    document.getElementById('action-prog-fill').style.width = data.pct + '%'
-                }
-                if (type === 'ok')        actionLog(`  ✔ ${data.hostname} → ${data.path}`, '#4ade80')
-                if (type === 'err')       actionLog(`  ✖ ${data.hostname} : ${data.error}`, '#f87171')
-                if (type === 'file_done') actionLog(`  ─ Terminé — ✔ ${data.ok}  ✖ ${data.err}`, 'var(--muted)')
-                if (type === 'done') {
-                    actionLog(`──────────────────────────────`, 'var(--border)')
-                    actionLog(`Terminé — ✔ ${data.ok}  ✖ ${data.err}`, data.err > 0 ? '#fbbf24' : '#4ade80')
-                    document.getElementById('action-prog-fill').style.width = '100%'
-                    _copyQueue = []
-                    closeActionModal()
-                }
-            } catch {}
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += decoder.decode(value, { stream: true })
+            const parts = buf.split('\n\n')
+            buf = parts.pop()
+            for (const part of parts) {
+                const line = part.replace(/^data: /, '')
+                if (!line) continue
+                try {
+                    const { type, data } = JSON.parse(line)
+                    if (type === 'start')
+                        actionLog(`📂 ${data.fileCount} fichier(s) → ${data.destination}`, 'var(--muted)')
+                    if (type === 'file_start')
+                        actionLog(`📄 [${data.fileIndex}/${data.fileCount}] ${data.fileName}`, '#60a5fa')
+                    if (type === 'progress') {
+                        document.getElementById('action-modal-status').textContent = `${data.done}/${data.total} — ✔ ${data.ok}  ✖ ${data.err}`
+                        document.getElementById('action-prog-fill').style.width = data.pct + '%'
+                    }
+                    if (type === 'ok')        actionLog(`  ✔ ${data.hostname} → ${data.path}`, '#4ade80')
+                    if (type === 'err')       actionLog(`  ✖ ${data.hostname} : ${data.error}`, '#f87171')
+                    if (type === 'file_done') actionLog(`  ─ Terminé — ✔ ${data.ok}  ✖ ${data.err}`, 'var(--muted)')
+                    if (type === 'done') {
+                        actionLog(`──────────────────────────────`, 'var(--border)')
+                        actionLog(`Terminé — ✔ ${data.ok}  ✖ ${data.err}`, data.err > 0 ? '#fbbf24' : '#4ade80')
+                        document.getElementById('action-prog-fill').style.width = '100%'
+                        _copyQueue = []
+                        closeActionModal()
+                    }
+                } catch {}
+            }
         }
+    } catch(e) {
+        if (e.name !== 'AbortError') actionLog(`Erreur : ${e.message}`, '#f87171')
+    } finally {
+        _actionAbortCtrl = null
     }
 }
 
@@ -3492,75 +3554,84 @@ async function runDeployDrivers(selected, username, password) {
         }
 
         // ── Appel SSE ──────────────────────────────────────────────────────
-        const res = await fetch('/api/deploy-drivers', {
-            method : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body   : JSON.stringify({
-                modele     : chosenModel,
-                targets    : selected.map(h => ({ hostname: h.hostname })),
-                username, password,
-                concurrency: 3
+        _actionAbortCtrl = new AbortController()
+        try {
+            const res = await fetch('/api/deploy-drivers', {
+                method : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                signal : _actionAbortCtrl.signal,
+                body   : JSON.stringify({
+                    modele     : chosenModel,
+                    targets    : selected.map(h => ({ hostname: h.hostname })),
+                    username, password,
+                    concurrency: 3
+                })
             })
-        })
 
-        const reader  = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buf = ''
+            const reader  = res.body.getReader()
+            const decoder = new TextDecoder()
+            let buf = ''
 
-        while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buf += decoder.decode(value, { stream: true })
-            const parts = buf.split('\n\n')
-            buf = parts.pop()
-            for (const part of parts) {
-                const line = part.replace(/^data: /, '')
-                if (!line) continue
-                try {
-                    const { type, data } = JSON.parse(line)
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                buf += decoder.decode(value, { stream: true })
+                const parts = buf.split('\n\n')
+                buf = parts.pop()
+                for (const part of parts) {
+                    const line = part.replace(/^data: /, '')
+                    if (!line) continue
+                    try {
+                        const { type, data } = JSON.parse(line)
 
-                    if (type === 'start') {
-                        document.getElementById('action-modal-status').textContent =
-                            `Modèle : ${data.modele} — ${data.total} poste(s)`
-                    }
-
-                    if (type === 'file_progress' && data.hostname) {
-                        const pct = data.total > 0 ? Math.round(data.current / data.total * 100) : 0
-                        if (data.phase === 'init') {
-                            updateRow(data.hostname, { bar: 0, phase: '🔌 Connexion...' })
-                        } else if (data.phase === 'copy') {
-                            updateRow(data.hostname, { bar: pct, pct, phase: `📋 Copie ${data.current}/${data.total}` })
-                        } else if (data.phase === 'pnputil') {
-                            updateRow(data.hostname, { bar: 100, pct: 100, phase: '⚙️ pnputil...', phaseColor: '#60a5fa' })
-                        } else if (data.phase === 'reenum') {
-                            updateRow(data.hostname, { phase: '🔄 Réénumération...', phaseColor: '#60a5fa' })
-                        } else if (data.phase === 'reenum_done') {
-                            updateRow(data.hostname, { phase: `🔄 ${data.message}`, phaseColor: '#a78bfa' })
+                        if (type === 'start') {
+                            document.getElementById('action-modal-status').textContent =
+                                `Modèle : ${data.modele} — ${data.total} poste(s)`
                         }
-                    }
 
-                    if (type === 'progress') {
-                        const pct = data.total > 0 ? Math.round(data.done / data.total * 100) : 0
-                        document.getElementById('action-prog-fill').style.width = pct + '%'
-                        document.getElementById('action-modal-status').textContent =
-                            `Poste ${data.done}/${data.total} — ✔ ${data.ok}  ✖ ${data.err}`
-                    }
+                        if (type === 'file_progress' && data.hostname) {
+                            const pct = data.total > 0 ? Math.round(data.current / data.total * 100) : 0
+                            if (data.phase === 'init') {
+                                updateRow(data.hostname, { bar: 0, phase: '🔌 Connexion...' })
+                            } else if (data.phase === 'copy') {
+                                updateRow(data.hostname, { bar: pct, pct, phase: `📋 Copie ${data.current}/${data.total}` })
+                            } else if (data.phase === 'pnputil') {
+                                updateRow(data.hostname, { bar: 100, pct: 100, phase: '⚙️ pnputil...', phaseColor: '#60a5fa' })
+                            } else if (data.phase === 'reenum') {
+                                updateRow(data.hostname, { phase: '🔄 Réénumération...', phaseColor: '#60a5fa' })
+                            } else if (data.phase === 'reenum_done') {
+                                updateRow(data.hostname, { phase: `🔄 ${data.message}`, phaseColor: '#a78bfa' })
+                            }
+                        }
 
-                    if (type === 'ok')
-                        updateRow(data.hostname, { bar: 100, pct: 100, phase: '✔ Installé', phaseColor: '#4ade80' })
-                    if (type === 'err')
-                        updateRow(data.hostname, { phase: `✖ ${data.error}`, phaseColor: '#f87171' })
-                    if (type === 'error')
-                        document.getElementById('action-modal-status').textContent = `✖ Erreur : ${data.message}`
+                        if (type === 'progress') {
+                            const pct = data.total > 0 ? Math.round(data.done / data.total * 100) : 0
+                            document.getElementById('action-prog-fill').style.width = pct + '%'
+                            document.getElementById('action-modal-status').textContent =
+                                `Poste ${data.done}/${data.total} — ✔ ${data.ok}  ✖ ${data.err}`
+                        }
 
-                    if (type === 'done') {
-                        document.getElementById('action-prog-fill').style.width = '100%'
-                        document.getElementById('action-modal-status').textContent =
-                            `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
-                        closeActionModal()
-                    }
-                } catch {}
+                        if (type === 'ok')
+                            updateRow(data.hostname, { bar: 100, pct: 100, phase: '✔ Installé', phaseColor: '#4ade80' })
+                        if (type === 'err')
+                            updateRow(data.hostname, { phase: `✖ ${data.error}`, phaseColor: '#f87171' })
+                        if (type === 'error')
+                            document.getElementById('action-modal-status').textContent = `✖ Erreur : ${data.message}`
+
+                        if (type === 'done') {
+                            document.getElementById('action-prog-fill').style.width = '100%'
+                            document.getElementById('action-modal-status').textContent =
+                                `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
+                            closeActionModal()
+                        }
+                    } catch {}
+                }
             }
+        } catch(e) {
+            if (e.name !== 'AbortError')
+                document.getElementById('action-modal-status').textContent = `Erreur : ${e.message}`
+        } finally {
+            _actionAbortCtrl = null
         }
     })
 }

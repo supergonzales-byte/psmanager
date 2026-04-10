@@ -8,7 +8,7 @@ const os        = require('os')
  * Copie un fichier local vers un ou plusieurs postes distants via WinRM
  * Utilise Copy-Item -ToSession (pas de limite de taille contrairement à Invoke-Command)
  */
-async function copyFileToHosts({ filePath, fileName, relPath, destination, targets, username, password, concurrency = 5, onProgress }) {
+async function copyFileToHosts({ filePath, fileName, relPath, destination, targets, username, password, concurrency = 5, isCancelled, onProgress }) {
     const dest         = destination || 'C:\\Windows\\Temp'
     const safeFileName = fileName.replace(/'/g, "''")
 
@@ -17,6 +17,7 @@ async function copyFileToHosts({ filePath, fileName, relPath, destination, targe
 
     async function worker() {
         while (index < targets.length) {
+            if (isCancelled && isCancelled()) return
             const { hostname } = targets[index++]
             const res = await copyOneFile({ hostname, filePath, fileName: safeFileName, relPath, destination: dest, username, password })
             done++
@@ -199,7 +200,7 @@ try {
 /**
  * Déploie les drivers d'un dossier local (serveur Node) vers des postes distants
  */
-async function deployDrivers({ modelePath, targets, username, password, concurrency = 3, onProgress }) {
+async function deployDrivers({ modelePath, targets, username, password, concurrency = 3, isCancelled, onProgress }) {
     if (!fs.existsSync(modelePath)) throw new Error(`Dossier introuvable : ${modelePath}`)
 
     const allFiles = []
@@ -218,6 +219,7 @@ async function deployDrivers({ modelePath, targets, username, password, concurre
 
     async function worker() {
         while (index < targets.length) {
+            if (isCancelled && isCancelled()) return
             const { hostname } = targets[index++]
             const res = await deployOneHost({ hostname, allFiles, modelePath, destOnHost, username, password,
                 onFileProgress: data => onProgress({ done, total: targets.length, ok: okCount, err: errCount, fileProgress: { ...data, hostname }, result: null })

@@ -43,7 +43,13 @@ router.post('/veyon-upload', upload.array('files'), (req, res) => {
 })
 
 const veyonSessions  = new Map()
+const veyonCancelled = new Map()
 const downloadTokens = new Set()
+
+router.post('/veyon-cancel', (req, res) => {
+    if (req.query.token) veyonCancelled.set(req.query.token, true)
+    res.json({ ok: true })
+})
 
 // Initialise une session de deploiement (retourne un token SSE)
 router.post('/veyon-deploy-init', (req, res) => {
@@ -65,10 +71,13 @@ router.post('/veyon-deploy-init', (req, res) => {
 
 // SSE : deploiement Veyon sur les postes cibles
 router.get('/veyon-deploy', async (req, res) => {
-    const session = veyonSessions.get(req.query.token)
+    const token   = req.query.token
+    const session = veyonSessions.get(token)
     if (!session) return res.status(400).json({ error: 'Token invalide ou expire' })
-    veyonSessions.delete(req.query.token)
+    veyonSessions.delete(token)
     const { targets, username, password, serverOrigin, dlToken } = session
+    veyonCancelled.delete(token)
+    const isCancelled = () => veyonCancelled.get(token) === true
 
     if (!fs.existsSync(VEYON_DIR))
         return res.status(400).json({ error: 'Dossier Veyon introuvable sur le serveur' })
@@ -263,7 +272,7 @@ public class PsmVeyonSSL : ICertificatePolicy {
     let authFailed = false
 
     async function worker() {
-        while (index < targets.length && !authFailed) {
+        while (index < targets.length && !authFailed && !isCancelled()) {
             const hostname = targets[index++]
             const result   = await runOneVeyon(hostname)
             done++
@@ -277,6 +286,7 @@ public class PsmVeyonSSL : ICertificatePolicy {
 
     const workers = Array.from({ length: Math.min(5, targets.length) }, worker)
     await Promise.all(workers)
+    veyonCancelled.delete(token)
     send('done', { ok: okCount, err: errCount, total })
     res.end()
 })

@@ -1,8 +1,14 @@
 const express = require('express')
 const { checkPort5985 } = require('../scan')
 
-const router         = express.Router()
-const actionSessions = new Map()
+const router           = express.Router()
+const actionSessions   = new Map()
+const actionCancelled  = new Map()
+
+router.post('/action-bulk-cancel', (req, res) => {
+    if (req.query.token) actionCancelled.set(req.query.token, true)
+    res.json({ ok: true })
+})
 
 router.post('/action', async (req, res) => {
     const { action, hostname, username, password, message } = req.body
@@ -66,10 +72,13 @@ router.post('/action-bulk-init', (req, res) => {
 })
 
 router.get('/action-bulk', async (req, res) => {
-    const session = actionSessions.get(req.query.token)
+    const token   = req.query.token
+    const session = actionSessions.get(token)
     if (!session) return res.status(400).json({ error: 'Token invalide ou expiré' })
-    actionSessions.delete(req.query.token)
+    actionSessions.delete(token)
     const { action, targets, username, password, throttle } = session
+    actionCancelled.delete(token)
+    const isCancelled = () => actionCancelled.get(token) === true
 
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
@@ -123,7 +132,7 @@ try { ${psCmd(hostname)}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.E
     }
 
     async function worker() {
-        while (index < hostList.length) {
+        while (index < hostList.length && !isCancelled()) {
             const hostname = hostList[index++]
             const result   = await runOne(hostname)
             done++
@@ -134,6 +143,7 @@ try { ${psCmd(hostname)}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.E
 
     const workers = Array.from({ length: Math.min(throttle, hostList.length) }, worker)
     await Promise.all(workers)
+    actionCancelled.delete(token)
     send('done', { ok: okCount, err: errCount, total })
     res.end()
 })

@@ -6,8 +6,14 @@ const { INSTALLERS_DIR }         = require('../lib/constants')
 const { resolveServerOrigin }    = require('../lib/config')
 const { checkPort5985 }          = require('../scan')
 
-const router          = express.Router()
-const installSessions = new Map()
+const router            = express.Router()
+const installSessions   = new Map()
+const installCancelled  = new Map()
+
+router.post('/install-cancel', (req, res) => {
+    if (req.query.token) installCancelled.set(req.query.token, true)
+    res.json({ ok: true })
+})
 
 router.post('/install-init', (req, res) => {
     const { installer, args, targets, username, password, throttle, serverOrigin } = req.body
@@ -24,10 +30,13 @@ router.post('/install-init', (req, res) => {
 })
 
 router.get('/install', async (req, res) => {
-    const session = installSessions.get(req.query.token)
+    const token   = req.query.token
+    const session = installSessions.get(token)
     if (!session) return res.status(400).json({ error: 'Token invalide ou expiré' })
-    installSessions.delete(req.query.token)
+    installSessions.delete(token)
     const { installer, args, targets, username, password, throttle, serverOrigin } = session
+    installCancelled.delete(token)
+    const isCancelled = () => installCancelled.get(token) === true
 
     const installerPath = path.join(INSTALLERS_DIR, installer)
     if (!fs.existsSync(installerPath))
@@ -145,7 +154,7 @@ public class PsmTrustAll : ICertificatePolicy {
     let authFailed = false
 
     async function worker() {
-        while (index < targets.length && !authFailed) {
+        while (index < targets.length && !authFailed && !isCancelled()) {
             const hostname = targets[index++]
             const result   = await runOneInstall(hostname)
             done++
@@ -158,6 +167,7 @@ public class PsmTrustAll : ICertificatePolicy {
 
     const workers = Array.from({ length: Math.min(throttle, targets.length) }, worker)
     await Promise.all(workers)
+    installCancelled.delete(token)
     send('done', { ok: okCount, err: errCount, total })
     res.end()
 })
