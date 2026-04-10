@@ -155,7 +155,7 @@ function inventoryOne(addr, username, password, logBaseDir, scriptPath) {
  * Inventaire parallèle de plusieurs postes
  * Collecte TOUS les résultats en mémoire, écrit parc.txt UNE SEULE FOIS à la fin
  */
-async function runInventory({ targets, username, password, parcFile, logBaseDir, concurrency, onProgress }) {
+async function runInventory({ targets, username, password, parcFile, logBaseDir, concurrency, onProgress, isCancelled }) {
     // Écrire le script PS dans un fichier temporaire
     const tmpScript = path.join(os.tmpdir(), `psinv_${Date.now()}.ps1`)
     fs.writeFileSync(tmpScript, INVENTORY_SCRIPT, 'utf-8')
@@ -168,6 +168,7 @@ async function runInventory({ targets, username, password, parcFile, logBaseDir,
 
     async function worker() {
         while (index < targets.length) {
+            if (isCancelled && isCancelled()) return
             const addr = targets[index++]
             const res  = await inventoryOne(addr, username, password, logBaseDir, tmpScript)
             done++

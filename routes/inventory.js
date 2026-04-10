@@ -143,6 +143,10 @@ router.get('/scan', async (req, res) => {
         if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type, data })}\n\n`)
     }
 
+    let cancelled = false
+    req.on('close', () => { cancelled = true })
+    const isCancelled = () => cancelled
+
     const ips   = getNetworkRange(ip, parseInt(prefix))
     const total = ips.length
 
@@ -152,7 +156,9 @@ router.get('/scan', async (req, res) => {
         if (newIp) send('found', { ip: newIp })
         if (scanned % 25 === 0 || scanned === total)
             send('progress', { scanned, total, found: foundCount, pct: Math.round(scanned / total * 100) })
-    })
+    }, isCancelled)
+
+    if (cancelled) return res.end()
 
     send('phase1done', { found: found.length, total })
 
@@ -194,6 +200,7 @@ router.get('/scan', async (req, res) => {
         parcFile   : PARC_FILE,
         logBaseDir : LOG_BASE,
         concurrency: parseInt(throttle),
+        isCancelled,
         onProgress : ({ done, total, ok, err, result }) => {
             send('inv_progress', { done, total, ok, err, pct: Math.round(done / total * 100) })
             if (result.ok) send('inv_ok',  { display: result.display })
@@ -201,15 +208,17 @@ router.get('/scan', async (req, res) => {
         }
     })
 
+    if (cancelled) return res.end()
+
     if (doLldp === 'true') {
-        await runLldpPhase(found, username, password, send)
+        await runLldpPhase(found, username, password, send, isCancelled)
     }
 
     send('done', { ok, err, message: `Termine — OK:${ok}  ERR:${err}` })
     res.end()
 })
 
-async function runLldpPhase(foundIps, username, password, send) {
+async function runLldpPhase(foundIps, username, password, send, isCancelled) {
     // Résoudre les hostnames depuis parc.txt pour les IPs trouvées
     const foundSet = new Set(foundIps)
     let parcLines = []
@@ -228,6 +237,7 @@ async function runLldpPhase(foundIps, username, password, send) {
 
     async function worker() {
         while (idx < targets.length) {
+            if (isCancelled && isCancelled()) return
             const { hostname } = targets[idx++]
             const result = await runLldpOnHost(hostname, username, password)
             done++

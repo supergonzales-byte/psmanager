@@ -85,13 +85,14 @@ function checkPort5985(host, timeout = 1000) {
  * @param {Function} onProgress - callback(scanned, total, found, ip) appelé à chaque résultat
  * @returns {Promise<string[]>} - Liste des IPs WinRM actives
  */
-async function scanNetwork(ips, concurrency, onProgress) {
+async function scanNetwork(ips, concurrency, onProgress, isCancelled) {
     const found   = []
     let   scanned = 0
     let   index   = 0
 
     async function worker() {
         while (index < ips.length) {
+            if (isCancelled && isCancelled()) return
             const ip    = ips[index++]
             const alive = await checkPort5985(ip, 1000)
             scanned++
