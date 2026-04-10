@@ -4749,13 +4749,13 @@ function settingsShutdownServer() {
         <input type="checkbox" id="scan-do-inv" checked onchange="document.getElementById('scan-exclude-known').disabled=!this.checked;document.getElementById('lbl-exclude-known').style.opacity=this.checked?'1':'.4'">
         <label for="scan-do-inv">Faire l'inventaire WinRM après le scan</label>
       </div>
-      <div class="inv-opt" style="margin-top:5px;margin-left:18px;">
+      <div class="inv-opt" style="margin-top:5px;">
         <input type="checkbox" id="scan-exclude-known">
         <label for="scan-exclude-known" id="lbl-exclude-known">Exclure les postes déjà inventoriés</label>
       </div>
       <div class="inv-opt" style="margin-top:5px;border-color:#bbf7d0;background:var(--green-l);">
         <input type="checkbox" id="scan-do-lldp">
-        <label for="scan-do-lldp" style="color:var(--green);">🔌 Effectuer le scan LLDP (port switch, VLAN) — ~32s/poste</label>
+        <label for="scan-do-lldp" style="color:var(--green);">🔌 Effectuer le scan LLDP</label>
       </div>
 
       <div class="scan-phase" id="scan-phase">En attente...</div>
