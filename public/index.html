@@ -833,6 +833,7 @@ header {
           <option value="schedule">📅 Planifier</option>
           <option value="login-history">📋 Historique des logins</option>
           <option value="install-software">📦 Installer un logiciel</option>
+          <option value="deploy-veyon">🖥️ Déployer Veyon</option>
         </select>
       </div>
 
@@ -895,6 +896,16 @@ header {
             <input type="text" id="inp-install-args" placeholder="Ex : /S  /qn  /silent  /VERYSILENT…" style="font-family:var(--mono);"
               oninput="if(_selectedInstaller) _installerArgs[_selectedInstaller] = this.value">
           </div>
+        </div>
+      </div>
+
+      <!-- Panneau déploiement Veyon -->
+      <div id="panel-deploy-veyon" style="display:none;">
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;padding:6px 8px;background:var(--card2);border-radius:6px;border:1px solid var(--border);">
+          🖥️ Déploie Veyon sur les postes sélectionnés.<br>
+          Fichiers requis dans <code>C:\ps-manager\veyon\</code> :
+          <code>veyon_configuration.json</code>, <code>publickey</code>, <code>key</code>, installeur <code>.exe</code>.<br>
+          <span id="veyon-files-status" style="color:var(--muted);">Chargement…</span>
         </div>
       </div>
 
@@ -2117,6 +2128,120 @@ async function runInstallBasket(selected, username, password) {
   }
 }
 
+// ══ DÉPLOIEMENT VEYON ════════════════════════════════════════════════════════
+
+async function loadVeyonFilesList() {
+  const el = document.getElementById('veyon-files-status')
+  if (!el) return
+  try {
+    const r = await fetch('/api/veyon-files-list')
+    const { files, installer } = await r.json()
+    const ok = installer && files.includes('key') && files.includes('publickey') && files.includes('veyon_configuration.json')
+    if (ok) {
+      el.style.color = 'var(--green)'
+      el.textContent = `✔ Prêt — ${installer}`
+    } else {
+      const missing = []
+      if (!installer) missing.push('installeur .exe')
+      if (!files.includes('veyon_configuration.json')) missing.push('veyon_configuration.json')
+      if (!files.includes('publickey')) missing.push('publickey')
+      if (!files.includes('key')) missing.push('key')
+      el.style.color = 'var(--red)'
+      el.textContent = `✖ Manquant : ${missing.join(', ')}`
+    }
+  } catch(e) {
+    el.style.color = 'var(--red)'
+    el.textContent = `Erreur : ${e.message}`
+  }
+}
+
+async function runVeyonDeploy(selected, username, password) {
+  if (!selected || !selected.length) return showNotif('⚠️', 'Sélectionnez au moins un poste.')
+  if (!username || !password) return showAlert('Identifiants WinRM requis.')
+
+  const targets = selected.map(h => h.hostname)
+
+  document.getElementById('inst-modal-title').textContent = `🖥️ Déploiement Veyon`
+  document.getElementById('inst-total').textContent  = targets.length
+  document.getElementById('inst-ok').textContent     = '0'
+  document.getElementById('inst-err').textContent    = '0'
+  document.getElementById('inst-status').textContent = 'En cours...'
+  document.getElementById('inst-status').style.color = 'var(--orange)'
+  document.getElementById('inst-results').innerHTML  = ''
+  document.getElementById('inst-prog-fill').style.width = '0%'
+  document.getElementById('inst-prog-pct').textContent  = '0%'
+  document.getElementById('inst-prog-text').textContent = `0 / ${targets.length}`
+  document.getElementById('inst-modal-close').disabled  = true
+  document.getElementById('install-modal').style.display = 'flex'
+  installRunning = true
+
+  let token
+  try {
+    const init = await fetch('/api/veyon-deploy-init', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targets, username, password, serverOrigin: window.location.origin })
+    })
+    const data = await init.json()
+    if (!data.token) throw new Error(data.error || 'Erreur init')
+    token = data.token
+  } catch(e) {
+    document.getElementById('inst-status').textContent = `Erreur : ${e.message}`
+    document.getElementById('inst-status').style.color = 'var(--red)'
+    document.getElementById('inst-modal-close').disabled = false
+    installRunning = false
+    return
+  }
+
+  const es = new EventSource(`/api/veyon-deploy?token=${token}`)
+
+  es.onmessage = e => {
+    const { type, data } = JSON.parse(e.data)
+
+    if (type === 'result') {
+      document.getElementById('inst-ok').textContent  = data.ok
+      document.getElementById('inst-err').textContent = data.err
+      const pct = Math.round(data.done / data.total * 100)
+      document.getElementById('inst-prog-fill').style.width      = pct + '%'
+      document.getElementById('inst-prog-fill').style.background = data.err > 0 ? 'var(--orange)' : 'var(--accent)'
+      document.getElementById('inst-prog-pct').textContent       = pct + '%'
+      document.getElementById('inst-prog-text').textContent      = `${data.done} / ${data.total}`
+
+      const row      = document.createElement('div')
+      row.className  = 'run-host-row'
+      row.style.borderColor = data.success ? '#1a3a1a' : '#3a1a1a'
+      const dot      = data.success ? '✔' : '✖'
+      const dotColor = data.success ? 'var(--green)' : 'var(--red)'
+      const statusTxt = data.success ? (data.output || 'OK') : (data.error || 'Erreur')
+      row.innerHTML = `
+        <div style="min-width:14px;color:${dotColor};font-size:13px;">${dot}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="run-host-name">${escHtml(data.hostname)}</div>
+          <div class="run-host-status" style="color:${dotColor};">${escHtml(statusTxt)}</div>
+        </div>`
+      document.getElementById('inst-results').appendChild(row)
+      document.getElementById('inst-results').scrollTop = 999999
+    }
+
+    if (type === 'done') {
+      const color = data.err === 0 ? 'var(--green)' : data.ok > 0 ? 'var(--orange)' : 'var(--red)'
+      document.getElementById('inst-status').textContent = `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
+      document.getElementById('inst-status').style.color = color
+      document.getElementById('inst-prog-fill').style.background = color
+      document.getElementById('inst-modal-close').disabled = false
+      es.close()
+      installRunning = false
+    }
+  }
+
+  es.onerror = () => {
+    document.getElementById('inst-status').textContent = 'Erreur de connexion SSE'
+    document.getElementById('inst-status').style.color = 'var(--red)'
+    document.getElementById('inst-modal-close').disabled = false
+    es.close()
+    installRunning = false
+  }
+}
+
 // ══ Rendu sélecteur ══
 function renderSelector(hosts) {
   const container = document.getElementById('selector-scroll')
@@ -2664,8 +2789,10 @@ function onActionChange() {
     document.getElementById('panel-schedule').style.display        = val === 'schedule'         ? 'block' : 'none'
     document.getElementById('panel-login-history').style.display   = val === 'login-history'    ? 'block' : 'none'
     document.getElementById('panel-install-software').style.display = val === 'install-software' ? 'block' : 'none'
+    document.getElementById('panel-deploy-veyon').style.display    = val === 'deploy-veyon'      ? 'block' : 'none'
     document.getElementById('panel-file-explorer') && (document.getElementById('panel-file-explorer').style.display = 'none')
     document.getElementById('btn-run-action').style.display        = (val && val !== 'copy-files' && val !== 'schedule' && val !== 'login-history') ? 'block' : 'none'
+    if (val === 'deploy-veyon') loadVeyonFilesList()
 }
 
 function actionLog(msg, color) {
@@ -2709,6 +2836,7 @@ async function runSelectedAction() {
     if (action === 'collect-drivers')  await runCollectDrivers(selected, username, password)
     if (action === 'deploy-drivers')   await runDeployDrivers(selected, username, password)
     if (action === 'install-software') await runInstallBasket(selected, username, password)
+    if (action === 'deploy-veyon')     await runVeyonDeploy(selected, username, password)
 }
 
 // ══ EXPLORATEUR DE FICHIERS DISTANT ══════════════════════════════════════════

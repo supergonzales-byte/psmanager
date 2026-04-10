@@ -2,7 +2,7 @@ const express = require('express')
 const fs      = require('fs')
 const path    = require('path')
 
-const { PORT, HTTPS_PORT, SSL_KEY, SSL_CERT, INSTALLERS_DIR } = require('./lib/constants')
+const { PORT, HTTPS_PORT, SSL_KEY, SSL_CERT, INSTALLERS_DIR, VEYON_DIR } = require('./lib/constants')
 const { loadConfig, ensureSslCert }                            = require('./lib/config')
 const { requireAuth }                                          = require('./lib/sessions')
 
@@ -36,6 +36,15 @@ app.use('/api', require('./routes/registry'))
 app.use('/api', require('./routes/warranty'))
 app.use('/api', require('./routes/admin'))
 app.use('/api', require('./routes/scheduling'))
+
+// Route custom pour servir les fichiers Veyon (express.static gère mal les espaces dans les noms)
+app.get('/veyon-files/:filename', (req, res) => {
+    const filename = decodeURIComponent(req.params.filename)
+    const filepath = path.resolve(VEYON_DIR, filename)
+    if (!filepath.startsWith(path.resolve(VEYON_DIR))) return res.status(403).end()
+    res.sendFile(filepath, err => { if (err && !res.headersSent) res.status(err.status || 500).end() })
+})
+app.use('/api', require('./routes/veyon'))
 
 // ── Serveur HTTP/HTTPS ──
 const http  = require('http')
