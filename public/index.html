@@ -3783,8 +3783,12 @@ function scanSetProg(pct, label, color) {
   const fill = document.getElementById('scan-prog-fill')
   fill.style.width      = pct + '%'
   fill.style.background = color || 'var(--accent)'
-  document.getElementById('scan-prog-pct').textContent  = pct + '%'
-  document.getElementById('scan-prog-text').textContent = label
+  const pctEl  = document.getElementById('scan-prog-pct')
+  const txtEl  = document.getElementById('scan-prog-text')
+  pctEl.textContent  = pct + '%'
+  txtEl.textContent  = label
+  if (color) { pctEl.style.color = color; txtEl.style.color = color }
+  else        { pctEl.style.color = ''; txtEl.style.color = '' }
 }
 
 async function startScan() {
@@ -3853,8 +3857,6 @@ async function startScan() {
     }
     if (type === 'done') {
       const color = data.err === 0 ? '#22c55e' : data.ok > 0 ? '#f59e0b' : '#ef4444'
-      document.getElementById('scan-phase').textContent = data.message
-      document.getElementById('scan-phase').style.color = color
       scanSetProg(100, data.message, color)
       scanLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', '#1e3a5f')
       scanLog(data.message, color)
