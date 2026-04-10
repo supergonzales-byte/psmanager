@@ -250,12 +250,16 @@ public class PsmVeyonSSL : ICertificatePolicy {
         })
     }
 
+    let authFailed = false
+
     async function worker() {
-        while (index < targets.length) {
+        while (index < targets.length && !authFailed) {
             const hostname = targets[index++]
             const result   = await runOneVeyon(hostname)
             done++
             if (result.ok) okCount++; else errCount++
+            // Arrêt immédiat si credentials invalides — évite de verrouiller le compte AD
+            if (result.error && result.error.startsWith('ERR_AUTH')) authFailed = true
             send('result', { done, total, ok: okCount, err: errCount,
                 hostname, success: result.ok, output: result.output || '', error: result.error || '' })
         }

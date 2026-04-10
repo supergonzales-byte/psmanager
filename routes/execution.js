@@ -49,12 +49,15 @@ router.get('/run', async (req, res) => {
 
     send('start', { total, script })
 
+    let authFailed = false
+
     async function worker() {
-        while (index < hostList.length) {
+        while (index < hostList.length && !authFailed) {
             const hostname = hostList[index++]
             const result = await runOneScript(scriptPath, hostname, hostname, username, password)
             done++
             if (result.ok) okCount++; else errCount++
+            if (result.error && result.error.startsWith('ERR_AUTH')) authFailed = true
             send('result', { done, total, ok: okCount, err: errCount,
                 hostname, success: result.ok, output: result.output, error: result.error })
         }

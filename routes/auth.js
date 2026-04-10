@@ -7,7 +7,24 @@ const { getLdapConfig, ldapBind, ldapCheckGroup } = require('../lib/ldap')
 
 const router = express.Router()
 
+// Rate limiting login : max 5 tentatives / 5 min par IP
+const loginAttempts = new Map()
+function checkRateLimit(ip) {
+    const now = Date.now()
+    const entry = loginAttempts.get(ip) || { count: 0, first: now }
+    if (now - entry.first > 5 * 60 * 1000) { entry.count = 0; entry.first = now }
+    entry.count++
+    loginAttempts.set(ip, entry)
+    return entry.count <= 5
+}
+setInterval(() => {
+    const now = Date.now()
+    for (const [ip, e] of loginAttempts) if (now - e.first > 5 * 60 * 1000) loginAttempts.delete(ip)
+}, 60000)
+
 router.post('/auth', async (req, res) => {
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown'
+    if (!checkRateLimit(ip)) return res.status(429).json({ ok: false, error: 'Trop de tentatives, réessayez dans 5 minutes' })
     const { username, password } = req.body
     if (!username || !password) return res.json({ ok: false, error: 'Identifiants manquants' })
 
