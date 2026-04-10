@@ -54,6 +54,14 @@ function updateParcLldp(hostname, lldp) {
 
 const router = express.Router()
 
+// Flag d'annulation scan — module-level, un seul scan à la fois
+let _scanCancelled = false
+
+router.post('/scan/cancel', (req, res) => {
+    _scanCancelled = true
+    res.json({ ok: true })
+})
+
 router.get('/parc', (req, res) => {
     try {
         if (!fs.existsSync(PARC_FILE)) return res.json([])
@@ -143,9 +151,9 @@ router.get('/scan', async (req, res) => {
         if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type, data })}\n\n`)
     }
 
-    let cancelled = false
-    req.on('close', () => { cancelled = true })
-    const isCancelled = () => cancelled
+    _scanCancelled = false
+    req.on('close', () => { _scanCancelled = true })
+    const isCancelled = () => _scanCancelled
 
     const ips   = getNetworkRange(ip, parseInt(prefix))
     const total = ips.length
@@ -158,7 +166,7 @@ router.get('/scan', async (req, res) => {
             send('progress', { scanned, total, found: foundCount, pct: Math.round(scanned / total * 100) })
     }, isCancelled)
 
-    if (cancelled) return res.end()
+    if (_scanCancelled) return res.end()
 
     send('phase1done', { found: found.length, total })
 
@@ -208,7 +216,7 @@ router.get('/scan', async (req, res) => {
         }
     })
 
-    if (cancelled) return res.end()
+    if (_scanCancelled) return res.end()
 
     if (doLldp === 'true') {
         await runLldpPhase(found, username, password, send, isCancelled)

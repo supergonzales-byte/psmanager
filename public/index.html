@@ -3685,6 +3685,7 @@ async function openScan() {
 function closeScan() {
   if (scanRunning) {
     showConfirm('⚠️', 'Un scan est en cours. Voulez-vous l\'annuler ?', () => {
+      fetch('/api/scan/cancel', { method: 'POST' }).catch(() => {})
       if (scanEs) { scanEs.close(); scanEs = null }
       scanRunning = false
       document.getElementById('scan-btn').disabled = false
