@@ -66,7 +66,23 @@ if (cfg.httpsEnabled) {
 try {
     const WebSocket = require('ws')
     const pty       = require('node-pty')
-    const wss       = new WebSocket.Server({ server })
+    const { sessions } = require('./lib/sessions')
+    const wss       = new WebSocket.Server({ noServer: true })
+
+    server.on('upgrade', (req, socket, head) => {
+        const cookieHeader = req.headers.cookie || ''
+        const match = cookieHeader.match(/(?:^|;\s*)psm_token=([^;]+)/)
+        const token = match ? match[1] : null
+        const session = token ? sessions.get(token) : null
+        if (!session || session.expires < Date.now()) {
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n')
+            socket.destroy()
+            return
+        }
+        wss.handleUpgrade(req, socket, head, ws => {
+            wss.emit('connection', ws, req)
+        })
+    })
 
     wss.on('connection', ws => {
         let ptyProcess = null
