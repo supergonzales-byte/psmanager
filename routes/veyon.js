@@ -42,17 +42,22 @@ router.post('/veyon-upload', upload.array('files'), (req, res) => {
     } catch(e) { res.status(500).json({ ok: false, error: e.message }) }
 })
 
-const veyonSessions = new Map()
+const veyonSessions  = new Map()
+const downloadTokens = new Set()
 
 // Initialise une session de deploiement (retourne un token SSE)
 router.post('/veyon-deploy-init', (req, res) => {
     const { targets, username, password, serverOrigin } = req.body
     if (!targets || !targets.length || !username || !password)
         return res.status(400).json({ error: 'Parametres manquants' })
-    const token = crypto.randomUUID()
+    const token   = crypto.randomUUID()
+    const dlToken = crypto.randomUUID()
+    downloadTokens.add(dlToken)
+    setTimeout(() => downloadTokens.delete(dlToken), 7200000) // expire apres 2h
     veyonSessions.set(token, {
         targets, username, password,
         serverOrigin: resolveServerOrigin(serverOrigin),
+        dlToken,
     })
     setTimeout(() => veyonSessions.delete(token), 30000)
     res.json({ token })
@@ -63,7 +68,7 @@ router.get('/veyon-deploy', async (req, res) => {
     const session = veyonSessions.get(req.query.token)
     if (!session) return res.status(400).json({ error: 'Token invalide ou expire' })
     veyonSessions.delete(req.query.token)
-    const { targets, username, password, serverOrigin } = session
+    const { targets, username, password, serverOrigin, dlToken } = session
 
     if (!fs.existsSync(VEYON_DIR))
         return res.status(400).json({ error: 'Dossier Veyon introuvable sur le serveur' })
@@ -111,6 +116,7 @@ router.get('/veyon-deploy', async (req, res) => {
         const safeOrigin   = serverOrigin.replace(/'/g, "''")
         const safeLoc      = preLocation.replace(/'/g, "''")
         const safeCompJson = computersJson.replace(/'/g, "''")
+        const safeDlToken  = dlToken.replace(/'/g, "''")
 
         const psScript = `
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -119,7 +125,7 @@ $secPass = ConvertTo-SecureString '${safePass}' -AsPlainText -Force
 $cred = New-Object System.Management.Automation.PSCredential('${username}', $secPass)
 try {
     $result = Invoke-Command -ComputerName '${hostname}' -Credential $cred -ScriptBlock {
-        param($origin, $inst, $loc, $compJson)
+        param($origin, $inst, $loc, $compJson, $dlToken)
 
         # Bypass SSL pour WebClient
         try {
@@ -151,7 +157,7 @@ public class PsmVeyonSSL : ICertificatePolicy {
                         else          { @('veyon_configuration.json','publickey',\$inst) }
 
             foreach (\$f in \$dlFiles) {
-                \$url  = "\$origin/veyon-files/\$([Uri]::EscapeDataString(\$f))"
+                \$url  = "\$origin/veyon-files/\$([Uri]::EscapeDataString(\$f))?token=\$dlToken"
                 \$dest = Join-Path \$tmpDir \$f
                 try { \$wc.DownloadFile(\$url, \$dest) }
                 catch { "ERR_DOWNLOAD: Impossible de telecharger '\$f' -- \$(\$_.Exception.Message)"; exit 1 }
@@ -216,7 +222,7 @@ public class PsmVeyonSSL : ICertificatePolicy {
         } finally {
             Remove-Item \$tmpDir -Recurse -Force -ErrorAction SilentlyContinue
         }
-    } -ArgumentList '${safeOrigin}', '${safeInst}', '${safeLoc}', '${safeCompJson}' -ErrorAction Stop
+    } -ArgumentList '${safeOrigin}', '${safeInst}', '${safeLoc}', '${safeCompJson}', '${safeDlToken}' -ErrorAction Stop
     $result
 } catch {
     $m = $_.Exception.Message
@@ -275,4 +281,5 @@ public class PsmVeyonSSL : ICertificatePolicy {
     res.end()
 })
 
+router.downloadTokens = downloadTokens
 module.exports = router

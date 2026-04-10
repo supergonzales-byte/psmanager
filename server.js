@@ -37,14 +37,17 @@ app.use('/api', require('./routes/warranty'))
 app.use('/api', require('./routes/admin'))
 app.use('/api', require('./routes/scheduling'))
 
-// Route custom pour servir les fichiers Veyon (express.static gère mal les espaces dans les noms)
+const veyonRoute = require('./routes/veyon')
+app.use('/api', veyonRoute)
+
+// Route custom pour servir les fichiers Veyon — token de deploiement obligatoire
 app.get('/veyon-files/:filename', (req, res) => {
+    if (!veyonRoute.downloadTokens.has(req.query.token)) return res.status(403).end()
     const filename = decodeURIComponent(req.params.filename)
     const filepath = path.resolve(VEYON_DIR, filename)
     if (!filepath.startsWith(path.resolve(VEYON_DIR))) return res.status(403).end()
     res.sendFile(filepath, err => { if (err && !res.headersSent) res.status(err.status || 500).end() })
 })
-app.use('/api', require('./routes/veyon'))
 
 // ── Serveur HTTP/HTTPS ──
 const http  = require('http')
