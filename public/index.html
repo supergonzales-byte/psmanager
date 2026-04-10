@@ -1319,6 +1319,24 @@ function openDetail(hostname) {
     })
   }
 
+  // Section LLDP si données disponibles
+  grid.parentElement.querySelectorAll('.lldp-detail-section').forEach(e => e.remove())
+  if (h.lldpSwitch) {
+    const ls = document.createElement('div')
+    ls.className = 'lldp-detail-section detail-field df-full'
+    ls.style.marginTop = '4px'
+    ls.innerHTML = `
+      <div class="df-label">Infos LLDP</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+        <div><span style="font-size:10px;color:var(--accent2);font-weight:600;">Switch</span><div class="df-value">${h.lldpSwitch||'—'}</div></div>
+        <div><span style="font-size:10px;color:var(--accent2);font-weight:600;">Port</span><div class="df-value">${h.lldpPort||'—'}</div></div>
+        <div><span style="font-size:10px;color:var(--accent2);font-weight:600;">VLAN</span><div class="df-value">${h.lldpVlan||'—'}</div></div>
+        <div><span style="font-size:10px;color:var(--accent2);font-weight:600;">IP Switch</span><div class="df-value">${h.lldpIp||'—'}</div></div>
+        ${h.lldpDesc ? `<div style="grid-column:1/-1;"><span style="font-size:10px;color:var(--accent2);font-weight:600;">Description</span><div class="df-value" style="color:var(--text2);" title="${h.lldpDesc}">${h.lldpDesc}</div></div>` : ''}
+      </div>`
+    grid.appendChild(ls)
+  }
+
   // Charger logiciels
   fetch(`/api/softs?hostname=${encodeURIComponent(hostname)}`)
     .then(r => r.json())
@@ -3571,9 +3589,10 @@ async function startScan() {
   const throttle  = document.getElementById('scan-throttle').value || 50
   const doInv        = document.getElementById('scan-do-inv').checked
   const excludeKnown = document.getElementById('scan-exclude-known').checked
+  const doLldp       = document.getElementById('scan-do-lldp').checked
   const username     = document.getElementById('scan-user').value.trim()
   const password     = document.getElementById('scan-pass').value
-  if (doInv && (!username || !password)) return showNotif('⚠️', "Identifiants WinRM requis pour l'inventaire.")
+  if ((doInv || doLldp) && (!username || !password)) return showNotif('⚠️', "Identifiants WinRM requis pour l'inventaire et le LLDP.")
 
   scanRunning = true
   document.getElementById('scan-btn').disabled = true
@@ -3581,7 +3600,7 @@ async function startScan() {
 
   const params = new URLSearchParams({
     ip: iface.ip, prefix: iface.prefix,
-    throttle, doInventory: doInv, excludeKnown,
+    throttle, doInventory: doInv, excludeKnown, doLldp,
     username, password
   })
 
@@ -3614,6 +3633,15 @@ async function startScan() {
     }
     if (type === 'inv_err') {
       scanLog(`  ✖ ${data.addr} — ${data.error}`, '#ef4444')
+    }
+    if (type === 'lldp_progress') {
+      scanSetProg(data.pct, `LLDP ${data.done} / ${data.total} — ✔ ${data.ok}  ✖ ${data.err}`, 'var(--green)')
+    }
+    if (type === 'lldp_ok') {
+      scanLog(`  🔌 ${data.hostname} — ${data.switch} / ${data.port} / VLAN ${data.vlan}`, '#22c55e')
+    }
+    if (type === 'lldp_err') {
+      scanLog(`  ✖ ${data.hostname} — ${data.error}`, '#94a3b8')
     }
     if (type === 'done') {
       const color = data.err === 0 ? '#22c55e' : data.ok > 0 ? '#f59e0b' : '#ef4444'
@@ -4724,6 +4752,10 @@ function settingsShutdownServer() {
       <div class="inv-opt" style="margin-top:5px;margin-left:18px;">
         <input type="checkbox" id="scan-exclude-known">
         <label for="scan-exclude-known" id="lbl-exclude-known">Exclure les postes déjà inventoriés</label>
+      </div>
+      <div class="inv-opt" style="margin-top:5px;border-color:#bbf7d0;background:var(--green-l);">
+        <input type="checkbox" id="scan-do-lldp">
+        <label for="scan-do-lldp" style="color:var(--green);">🔌 Effectuer le scan LLDP (port switch, VLAN) — ~32s/poste</label>
       </div>
 
       <div class="scan-phase" id="scan-phase">En attente...</div>

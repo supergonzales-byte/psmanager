@@ -1,9 +1,56 @@
 const express = require('express')
 const fs      = require('fs')
+const path    = require('path')
 const { PARC_FILE, SCRIPTS_DIR, LOG_BASE } = require('../lib/constants')
 const { getNetworkInterfaces, getNetworkRange, scanNetwork, checkPort5985 } = require('../scan')
 const { runInventory } = require('../inventory')
 const { sendWol }      = require('../wol')
+
+const LLDP_SCRIPT = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'lldp-capture.ps1'), 'utf8')
+
+function runLldpOnHost(hostname, username, password) {
+    return new Promise(resolve => {
+        const { spawn } = require('child_process')
+        const safeUser = username.replace(/'/g, "''")
+        const safePass = password.replace(/'/g, "''")
+        const safeHost = hostname.replace(/'/g, "''")
+        const psCmd = `$pw = ConvertTo-SecureString '${safePass}' -AsPlainText -Force\n$cred = New-Object System.Management.Automation.PSCredential('${safeUser}', $pw)\n$sb = [scriptblock]::Create(@'\n${LLDP_SCRIPT}\n'@)\nInvoke-Command -ComputerName '${safeHost}' -Credential $cred -ScriptBlock $sb -ErrorAction Stop`
+        const ps = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', psCmd], { windowsHide: true })
+        const out = [], err = []
+        const timer = setTimeout(() => { ps.kill(); resolve({ ok: false, error: 'TIMEOUT' }) }, 90000)
+        ps.stdout.on('data', d => out.push(d))
+        ps.stderr.on('data', d => err.push(d))
+        ps.on('close', () => {
+            clearTimeout(timer)
+            const iconv  = require('iconv-lite')
+            const stdout = iconv.decode(Buffer.concat(out), 'cp850')
+            const okLine = stdout.split('\n').find(l => l.trim().startsWith('LLDP_OK|'))
+            if (okLine) {
+                const p = okLine.trim().split('|')
+                resolve({ ok: true, switch: p[1]||'', port: p[2]||'', vlan: p[3]||'', ip_sw: p[4]||'', desc: (p[5]||'').substring(0, 25) })
+            } else {
+                resolve({ ok: false, error: 'Aucune trame LLDP' })
+            }
+        })
+    })
+}
+
+function updateParcLldp(hostname, lldp) {
+    try {
+        const lines = fs.readFileSync(PARC_FILE, 'utf-8').split('\n').map(l => l.trim()).filter(l => l)
+        const idx   = lines.findIndex(l => l.split('|')[0] === hostname)
+        if (idx === -1) return
+        const parts = lines[idx].split('|')
+        while (parts.length < 16) parts.push('')
+        parts[16] = lldp.switch || ''
+        parts[17] = lldp.port   || ''
+        parts[18] = String(lldp.vlan || '')
+        parts[19] = lldp.ip_sw  || ''
+        parts[20] = (lldp.desc  || '').substring(0, 25)
+        lines[idx] = parts.join('|')
+        fs.writeFileSync(PARC_FILE, lines.join('\n') + '\n', 'utf-8')
+    } catch(e) { console.error('updateParcLldp:', e.message) }
+}
 
 const router = express.Router()
 
@@ -31,6 +78,11 @@ router.get('/parc', (req, res) => {
                 typeRam     : p[13] || '',
                 cpu         : p[14] || '',
                 installDate : p[15] || '',
+                lldpSwitch  : p[16] || '',
+                lldpPort    : p[17] || '',
+                lldpVlan    : p[18] || '',
+                lldpIp      : p[19] || '',
+                lldpDesc    : p[20] || '',
             }
         })
         res.json(hosts)
@@ -80,7 +132,7 @@ router.post('/ping-batch', async (req, res) => {
 })
 
 router.get('/scan', async (req, res) => {
-    const { ip, prefix, throttle = 50, doInventory, excludeKnown, username, password } = req.query
+    const { ip, prefix, throttle = 50, doInventory, excludeKnown, doLldp, username, password } = req.query
     if (!ip || !prefix) return res.status(400).json({ error: 'ip et prefix requis' })
 
     res.setHeader('Content-Type', 'text/event-stream')
@@ -149,9 +201,49 @@ router.get('/scan', async (req, res) => {
         }
     })
 
+    if (doLldp === 'true') {
+        await runLldpPhase(found, username, password, send)
+    }
+
     send('done', { ok, err, message: `Termine — OK:${ok}  ERR:${err}` })
     res.end()
 })
+
+async function runLldpPhase(foundIps, username, password, send) {
+    // Résoudre les hostnames depuis parc.txt pour les IPs trouvées
+    const foundSet = new Set(foundIps)
+    let parcLines = []
+    try { parcLines = fs.readFileSync(PARC_FILE, 'utf-8').split('\n').map(l => l.trim()).filter(l => l) } catch {}
+    const targets = parcLines
+        .map(l => { const p = l.split('|'); return { hostname: p[0], ip: p[1] } })
+        .filter(h => h.hostname && foundSet.has(h.ip))
+
+    if (!targets.length) return
+
+    const total = targets.length
+    send('phase', { phase: 3, label: `Phase 3 — LLDP sur ${total} poste(s) (~32s/poste)`, total })
+
+    let done = 0, ok = 0, err = 0, idx = 0
+    const concurrency = Math.min(4, total)
+
+    async function worker() {
+        while (idx < targets.length) {
+            const { hostname } = targets[idx++]
+            const result = await runLldpOnHost(hostname, username, password)
+            done++
+            if (result.ok) {
+                ok++
+                updateParcLldp(hostname, result)
+                send('lldp_ok', { done, total, hostname, switch: result.switch, port: result.port, vlan: result.vlan })
+            } else {
+                err++
+                send('lldp_err', { done, total, hostname, error: result.error })
+            }
+            send('lldp_progress', { done, total, ok, err, pct: Math.round(done / total * 100) })
+        }
+    }
+    await Promise.all(Array.from({ length: concurrency }, worker))
+}
 
 router.post('/wol', async (req, res) => {
     const { hostnames } = req.body
