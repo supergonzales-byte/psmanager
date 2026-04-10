@@ -164,22 +164,26 @@ public class PsmVeyonSSL : ICertificatePolicy {
             \$cli      = 'C:\\Program Files\\Veyon\\veyon-cli.exe'
             \$svc      = 'C:\\Program Files\\Veyon\\veyon-service.exe'
 
-            # Installation si absente ou version < 4.9.5
-            \$needInstall = -not (Test-Path \$svc)
-            if (-not \$needInstall) {
-                try {
-                    \$cur = [version](Get-Item \$svc).VersionInfo.FileVersion
-                    \$needInstall = [version]"\$(\$cur.Major).\$(\$cur.Minor).\$(\$cur.Build)" -lt [version]'4.9.5'
-                } catch { \$needInstall = \$true }
+            # Desinstaller l'ancienne version si presente, puis installer
+            \$veyonReg = Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue |
+                Where-Object { \$_.DisplayName -like 'Veyon*' } | Select-Object -First 1
+            if (-not \$veyonReg) {
+                \$veyonReg = Get-ItemProperty 'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue |
+                    Where-Object { \$_.DisplayName -like 'Veyon*' } | Select-Object -First 1
             }
-            if (\$needInstall) {
-                \$installArgs = if (\$isProf) { '/S' } else { '/S /NoMaster /NoStartMenuFolder' }
-                Remove-Item 'HKLM:\\SOFTWARE\\Veyon Solutions' -Recurse -ErrorAction SilentlyContinue
-                \$p = Start-Process \$instPath -ArgumentList \$installArgs -Wait -NoNewWindow -PassThru
-                if (\$p.ExitCode -ne 0) { throw "Installation echouee (code \$(\$p.ExitCode))" }
-                Start-Sleep -Seconds 10
-                if (-not (Test-Path \$svc)) { throw "Service Veyon introuvable apres installation" }
+            if (\$veyonReg -and \$veyonReg.UninstallString) {
+                \$uninstExe = (\$veyonReg.UninstallString -replace '"','').Trim()
+                & \$uninstExe /S
+                \$waited = 0
+                while ((Test-Path \$svc) -and \$waited -lt 60) { Start-Sleep -Seconds 2; \$waited += 2 }
+                if (Test-Path \$svc) { throw "Desinstallation echouee : service encore present apres 60s" }
             }
+            Remove-Item 'HKLM:\\SOFTWARE\\Veyon Solutions' -Recurse -ErrorAction SilentlyContinue
+            \$installArgs = if (\$isProf) { '/S' } else { '/S /NoMaster /NoStartMenuFolder' }
+            \$p = Start-Process -FilePath \$instPath -ArgumentList \$installArgs -Wait -NoNewWindow -PassThru
+            if (\$p.ExitCode -ne 0) { throw "Installation echouee (code \$(\$p.ExitCode))" }
+            Start-Sleep -Seconds 10
+            if (-not (Test-Path \$svc)) { throw "Service Veyon introuvable apres installation" }
 
             # Import configuration (2>$null supprime les warnings Qt sur stderr)
             & \$cli config import "\$cfgPath" 2>$null
