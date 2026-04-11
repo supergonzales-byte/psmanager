@@ -47,7 +47,11 @@ npm install
 node server.js
 ```
 
-L'interface est accessible sur `http://localhost:3000`.
+L'interface est accessible sur `http://localhost:3000` (HTTP) ou `https://localhost:443` (HTTPS).
+
+## HTTPS
+
+HTTPS peut être activé depuis les paramètres de l'interface. Le serveur utilise alors le port 443 avec les certificats placés dans `ssl/key.pem` et `ssl/cert.pem`. Si les certificats sont absents, un certificat auto-signé est généré automatiquement au démarrage.
 
 ## Configuration
 
