@@ -663,4 +663,79 @@ try {
 }
 
 
-module.exports = { copyFileToHosts, collectDrivers, deployDrivers, listDirectory, downloadFile, deleteRemote, mkdirRemote, uploadToRemote }
+/**
+ * Télécharge un dossier distant vers le serveur Node (tmp) via Copy-Item -FromSession -Recurse
+ * Zippe le résultat avec archiver, retourne { ok, localPath, fileName }
+ * Le zip tmp est nettoyé par le caller après stream
+ */
+function downloadDirectory({ hostname, username, password, remotePath }) {
+    return new Promise(async resolve => {
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
+
+        const dirName   = path.basename(remotePath)
+        const tmpDir    = path.join(os.tmpdir(), `psmdldir_${Date.now()}_${dirName}`)
+        const tmpZip    = path.join(os.tmpdir(), `psmdlzip_${Date.now()}_${dirName}.zip`)
+        const tmpDirEsc = tmpDir.replace(/\\/g, '\\\\')
+        const tmpScript = path.join(os.tmpdir(), `dldir_${Date.now()}.ps1`)
+
+        const escapedPw   = password.replace(/'/g, "''")
+        const escapedHost = hostname.replace(/'/g, "''")
+        const escapedSrc  = remotePath.replace(/'/g, "''")
+
+        const psScript = `
+$pw   = ConvertTo-SecureString '${escapedPw}' -AsPlainText -Force
+$cred = New-Object System.Management.Automation.PSCredential('${username}', $pw)
+try {
+    $sess = New-PSSession -ComputerName '${escapedHost}' -Credential $cred -ErrorAction Stop
+    Copy-Item -Path '${escapedSrc}' -Destination '${tmpDirEsc}' -FromSession $sess -Recurse -Force -ErrorAction Stop
+    Remove-PSSession $sess
+    Write-Output "OK"
+} catch {
+    Write-Output "ERROR|$($_.Exception.Message)"
+    try { Remove-PSSession $sess -ErrorAction SilentlyContinue } catch {}
+}
+`
+        fs.writeFileSync(tmpScript, '\uFEFF' + psScript, 'utf-8')
+        const ps    = spawn('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', tmpScript], { windowsHide: true })
+        const bufs  = []
+        const timer = setTimeout(() => { ps.kill(); cleanupScript(); resolve({ ok: false, error: 'TIMEOUT (>60min)' }) }, 3600000)
+
+        ps.stdout.on('data', d => bufs.push(d))
+        ps.on('close', () => {
+            clearTimeout(timer)
+            cleanupScript()
+            const out = Buffer.concat(bufs).toString('utf8').trim()
+            if (out !== 'OK') {
+                const errLine = out.split('\n').find(l => l.startsWith('ERROR|'))
+                let msg = errLine ? errLine.replace('ERROR|', '') : out
+                if (/accès refusé|access.?denied/i.test(msg)) msg = 'Accès refusé — identifiants invalides'
+                else if (msg.length > 150) msg = msg.slice(0, 150) + '…'
+                return resolve({ ok: false, error: msg })
+            }
+
+            const archiver = require('archiver')
+            const output   = fs.createWriteStream(tmpZip)
+            const archive  = archiver('zip', { zlib: { level: 6 } })
+
+            output.on('close', () => {
+                cleanupTmpDir()
+                resolve({ ok: true, localPath: tmpZip, fileName: dirName + '.zip', isZip: true })
+            })
+            archive.on('error', err => {
+                cleanupTmpDir()
+                resolve({ ok: false, error: err.message })
+            })
+
+            archive.pipe(output)
+            archive.directory(tmpDir, dirName)
+            archive.finalize()
+        })
+
+        function cleanupScript()  { try { fs.unlinkSync(tmpScript) } catch {} }
+        function cleanupTmpDir()  { try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {} }
+    })
+}
+
+
+module.exports = { copyFileToHosts, collectDrivers, deployDrivers, listDirectory, downloadFile, downloadDirectory, deleteRemote, mkdirRemote, uploadToRemote }

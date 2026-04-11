@@ -520,6 +520,7 @@ header {
 .fs-item-date { font-family:var(--mono); font-size:10px; color:var(--muted); min-width:120px; text-align:right; }
 .fs-empty { text-align:center; padding:40px; color:var(--muted); font-size:13px; }
 .fs-status { padding:6px 14px; background:var(--card2); border-top:1px solid var(--border); font-family:var(--mono); font-size:11px; color:var(--muted); flex-shrink:0; display:flex; align-items:center; gap:10px; }
+.fs-dl-spin { display:inline-block; width:11px; height:11px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:4px; flex-shrink:0; }
 .fs-upload-zone { border:2px dashed var(--border2); border-radius:8px; padding:12px; text-align:center; cursor:pointer; transition:all .2s; margin:6px 14px; font-size:12px; color:var(--muted); }
 .fs-upload-zone:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-l2); }
 
@@ -3440,30 +3441,34 @@ function fsGoUp() {
 function fsRefresh() { fsLoad(_fsPath) }
 
 async function fsDownload() {
-    if (!_fsSelected || _fsSelected.isDir) return
-    const remotePath = _fsPath.replace(/\\+$/, '') + '\\' + _fsSelected.name
-    fsSetStatus(`⬇ Téléchargement de ${_fsSelected.name}...`)
-    document.getElementById('fs-toolbar-status').textContent = '⬇ Téléchargement...'
+    if (!_fsSelected) return
+    const isDir       = _fsSelected.isDir
+    const remotePath  = _fsPath.replace(/\\+$/, '') + '\\' + _fsSelected.name
+    const displayName = isDir ? _fsSelected.name + '.zip' : _fsSelected.name
+    const spin        = '<span class="fs-dl-spin"></span>'
+
+    fsSetStatusHtml(isDir
+        ? `${spin} Préparation du téléchargement du répertoire "${_fsSelected.name}" en cours...`
+        : `${spin} Téléchargement de ${displayName}...`)
+
     try {
-        const params = new URLSearchParams({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath })
+        const params = new URLSearchParams({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath, isDir: isDir ? 'true' : 'false' })
         const res = await fetch(`/api/fs/download?${params}`)
         if (!res.ok) {
             const err = await res.json()
             fsSetStatus(`✖ Erreur : ${err.error}`)
-            document.getElementById('fs-toolbar-status').textContent = ''
             return
         }
+        fsSetStatusHtml(`${spin} Réception de ${displayName}...`)
         const blob = await res.blob()
         const a    = document.createElement('a')
         a.href     = URL.createObjectURL(blob)
-        a.download = _fsSelected.name
+        a.download = displayName
         a.click()
         URL.revokeObjectURL(a.href)
-        fsSetStatus(`✔ Téléchargé : ${_fsSelected.name}`)
-        document.getElementById('fs-toolbar-status').textContent = ''
+        fsSetStatus(`✔ Téléchargé : ${displayName}`)
     } catch(e) {
         fsSetStatus(`✖ Erreur : ${e.message}`)
-        document.getElementById('fs-toolbar-status').textContent = ''
     }
 }
 
@@ -3567,7 +3572,7 @@ function fsBreadcrumb(remotePath) {
 function fsUpdateButtons() {
     const hasSel = !!_fsSelected
     const isFile = hasSel && !_fsSelected.isDir
-    document.getElementById('fs-btn-dl').disabled  = !isFile
+    document.getElementById('fs-btn-dl').disabled  = !hasSel
     document.getElementById('fs-btn-del').disabled = !hasSel
     const parts = _fsPath.replace(/\\+$/, '').split('\\')
     document.getElementById('fs-btn-up').disabled  = parts.length <= 1
@@ -3576,6 +3581,10 @@ function fsUpdateButtons() {
 function fsSetStatus(msg) {
     const el = document.getElementById('fs-status-text')
     if (el) el.textContent = msg
+}
+function fsSetStatusHtml(html) {
+    const el = document.getElementById('fs-status-text')
+    if (el) el.innerHTML = html
 }
 
 function formatSize(bytes) {

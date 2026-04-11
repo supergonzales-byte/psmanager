@@ -3,7 +3,7 @@ const fs      = require('fs')
 const path    = require('path')
 const os      = require('os')
 const { multerFs }                                                        = require('../lib/multer')
-const { listDirectory, downloadFile, deleteRemote, mkdirRemote, uploadToRemote } = require('../actions')
+const { listDirectory, downloadFile, downloadDirectory, deleteRemote, mkdirRemote, uploadToRemote } = require('../actions')
 
 const router = express.Router()
 
@@ -16,11 +16,13 @@ router.get('/fs/list', async (req, res) => {
 })
 
 router.get('/fs/download', async (req, res) => {
-    const { hostname, username, password, path: remotePath } = req.query
+    const { hostname, username, password, path: remotePath, isDir } = req.query
     if (!hostname || !username || !password || !remotePath)
         return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
 
-    const result = await downloadFile({ hostname, username, password, remotePath })
+    const result = isDir === 'true'
+        ? await downloadDirectory({ hostname, username, password, remotePath })
+        : await downloadFile({ hostname, username, password, remotePath })
     if (!result.ok) return res.status(500).json({ ok: false, error: result.error })
 
     const encoded = encodeURIComponent(result.fileName)

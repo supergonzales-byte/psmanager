@@ -7,6 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "express": "^4.18.2",
     "iconv-lite": "^0.6.3",
     "ldapts": "^8.1.7",
