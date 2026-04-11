@@ -9,6 +9,8 @@ const { runOneScript } = require('../lib/remote-execution')
 
 const router = express.Router()
 
+const DAY_LABELS = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam']
+
 // ── Chiffrement des mots de passe dans schedules.json ──
 let _schedKey
 function _getSchedKey() {
@@ -41,6 +43,15 @@ function decryptSchedPassword(stored) {
         const decipher = crypto.createDecipheriv('aes-256-cbc', _getSchedKey(), iv)
         return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf-8')
     } catch { return null }
+}
+
+// ── Helpers ──
+function describeRecurrence(recurrence, daysOfWeek, time) {
+    if (recurrence === 'daily') return `Tous les jours à ${time}`
+    const labels = [...new Set((daysOfWeek || []).map(Number))]
+        .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+        .map(d => DAY_LABELS[d])
+    return `${labels.join(', ')} à ${time}`
 }
 
 // ── Gestion des tâches ──
@@ -102,11 +113,40 @@ try { ${psCmd} } catch {}
     await Promise.all(workers)
 }
 
+// ── Planification ponctuelle ──
 function scheduleTask(task) {
     const date = new Date(task.at)
     const job  = nodeSchedule.scheduleJob(task.id, date, async () => {
         await executeScheduledTask(task).catch(e => console.error('Erreur tâche planifiée:', e.message))
         scheduledJobs.delete(task.id)
+        persistSchedules()
+    })
+    if (job) scheduledJobs.set(task.id, { task, job })
+}
+
+// ── Planification récurrente ──
+function scheduleRecurringTask(task) {
+    const [hours, minutes] = task.time.split(':').map(Number)
+    const rule = new nodeSchedule.RecurrenceRule()
+    rule.hour   = hours
+    rule.minute = minutes
+    rule.second = 0
+    if (task.recurrence === 'weekly') {
+        rule.dayOfWeek = task.daysOfWeek
+    }
+    const job = nodeSchedule.scheduleJob(task.id, rule, async () => {
+        task.runCount  = (task.runCount || 0) + 1
+        task.lastRunAt = new Date().toISOString()
+        task.status    = 'running'
+        persistSchedules()
+        try {
+            await executeScheduledTask(task)
+            task.status = 'scheduled'
+        } catch (e) {
+            task.status    = 'error'
+            task.lastError = e.message
+            console.error('Erreur tâche récurrente:', e.message)
+        }
         persistSchedules()
     })
     if (job) scheduledJobs.set(task.id, { task, job })
@@ -118,7 +158,12 @@ function loadSchedules() {
         const list = JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf-8'))
         let restored = 0
         for (const task of list) {
-            if (new Date(task.at) > new Date()) { scheduleTask(task); restored++ }
+            if (task.recurrence && task.recurrence !== 'once') {
+                scheduleRecurringTask(task)
+                restored++
+            } else {
+                if (new Date(task.at) > new Date()) { scheduleTask(task); restored++ }
+            }
         }
         if (restored) console.log(`✔ ${restored} tâche(s) planifiée(s) restaurée(s)`)
     } catch(e) { console.warn('Erreur chargement schedules.json:', e.message) }
@@ -128,21 +173,58 @@ loadSchedules()
 
 // ── Routes ──
 router.post('/schedule', (req, res) => {
-    const { type, script, targets, at, username, password, label, throttle } = req.body
-    if (!type || !targets || !targets.length || !at)
+    const { type, script, targets, at, username, password, label, throttle, recurrence, time, daysOfWeek, description } = req.body
+
+    if (!type || !targets || !targets.length)
         return res.status(400).json({ error: 'Paramètres manquants' })
     if (['script', 'reboot', 'shutdown'].includes(type) && (!username || !password))
         return res.status(400).json({ error: 'Identifiants requis' })
     if (type === 'script' && !script)
         return res.status(400).json({ error: 'Script requis' })
+
+    const isRecurring = recurrence && recurrence !== 'once'
+
+    if (isRecurring) {
+        if (!['daily', 'weekly'].includes(recurrence))
+            return res.status(400).json({ error: 'Récurrence invalide' })
+        if (!/^\d{2}:\d{2}$/.test(time || ''))
+            return res.status(400).json({ error: 'Heure invalide' })
+        const days = recurrence === 'weekly'
+            ? (Array.isArray(daysOfWeek) ? daysOfWeek.map(Number).filter(n => n >= 0 && n <= 6) : [])
+            : []
+        if (recurrence === 'weekly' && !days.length)
+            return res.status(400).json({ error: 'Choisissez au moins un jour' })
+
+        const id   = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+        const task = {
+            id, type, script: script || null, targets,
+            username: username || null,
+            password: encryptSchedPassword(password || null),
+            recurrence, time,
+            daysOfWeek: days,
+            description: String(description || label || '').trim(),
+            label: String(description || label || '').trim(),
+            throttle: parseInt(throttle) || 10,
+            runCount: 0, lastRunAt: null, status: 'scheduled',
+            createdAt: new Date().toISOString()
+        }
+        scheduleRecurringTask(task)
+        persistSchedules()
+        return res.json({ ok: true, id })
+    }
+
+    // Ponctuelle
+    if (!at) return res.status(400).json({ error: 'Paramètres manquants' })
     const date = new Date(at)
     if (isNaN(date.getTime()) || date <= new Date())
         return res.status(400).json({ error: 'Date invalide ou passée' })
+
     const id   = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     const task = {
         id, type, script: script || null, targets, at,
         username: username || null,
         password: encryptSchedPassword(password || null),
+        recurrence: 'once',
         label: label || '',
         throttle: parseInt(throttle) || 10,
         createdAt: new Date().toISOString()
@@ -153,11 +235,33 @@ router.post('/schedule', (req, res) => {
 })
 
 router.get('/schedules', (req, res) => {
-    const list = [...scheduledJobs.values()].map(({ task }) => ({
-        id: task.id, type: task.type, script: task.script,
-        targets: task.targets, at: task.at, label: task.label, createdAt: task.createdAt
-    }))
-    list.sort((a, b) => new Date(a.at) - new Date(b.at))
+    const list = [...scheduledJobs.values()].map(({ task, job }) => {
+        const base = {
+            id: task.id, type: task.type, script: task.script,
+            targets: task.targets, label: task.label || task.description || '',
+            createdAt: task.createdAt, recurrence: task.recurrence || 'once',
+        }
+        if (task.recurrence && task.recurrence !== 'once') {
+            const nextInv = job?.nextInvocation?.()
+            return {
+                ...base,
+                time: task.time,
+                daysOfWeek: task.daysOfWeek || [],
+                description: task.description || '',
+                runCount: task.runCount || 0,
+                lastRunAt: task.lastRunAt || null,
+                status: task.status || 'scheduled',
+                nextRunAt: nextInv ? new Date(nextInv).toISOString() : null,
+                summary: describeRecurrence(task.recurrence, task.daysOfWeek, task.time),
+            }
+        }
+        return { ...base, at: task.at }
+    })
+    list.sort((a, b) => {
+        const ta = new Date(a.nextRunAt || a.at || 0).getTime()
+        const tb = new Date(b.nextRunAt || b.at || 0).getTime()
+        return ta - tb
+    })
     res.json(list)
 })
 

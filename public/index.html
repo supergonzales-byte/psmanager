@@ -766,6 +766,12 @@ header {
 .sched-recap-row { display:flex; align-items:flex-start; gap:12px; padding:9px 12px; border-radius:8px; background:var(--card2); border:1px solid var(--border); margin-bottom:8px; }
 .sched-recap-row .srr-label { font-size:10px; color:var(--muted); font-weight:700; letter-spacing:.06em; text-transform:uppercase; margin-bottom:3px; }
 .sched-recap-row .srr-value { font-size:13px; color:var(--text); font-weight:600; }
+.sched-mode-toggle { display:flex; border:1.5px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:12px; }
+.sched-mode-btn { flex:1; padding:7px 12px; font-size:12px; font-weight:600; cursor:pointer; background:transparent; color:var(--muted); border:none; transition:background .15s, color .15s; }
+.sched-mode-btn.active { background:var(--accent); color:#fff; }
+.sched-day-grid { display:flex; gap:5px; flex-wrap:wrap; margin-top:6px; }
+.sched-day-btn { padding:5px 10px; font-size:11px; font-weight:700; border:1.5px solid var(--border); border-radius:6px; cursor:pointer; background:var(--card2); color:var(--muted); transition:all .15s; user-select:none; }
+.sched-day-btn.selected { border-color:var(--accent); background:var(--accent-l); color:var(--accent); }
 .copy-item-row { display:flex; align-items:center; gap:6px; padding:4px 6px; border-radius:5px; background:var(--card2); border:1px solid var(--border); font-size:12px; color:var(--text); }
 .copy-item-row:hover { border-color:var(--border2); }
 .copy-stat-tile { background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; text-align:center; }
@@ -4876,17 +4882,35 @@ ${sections}</body></html>`
 
 // ── PLANIFICATION ─────────────────────────────────────────────────────────
 let _schedType = ''
+let _schedMode  = 'once'   // 'once' | 'recur'
+let _schedRecur = 'daily'  // 'daily' | 'weekly'
+let _schedDays  = []       // jours sélectionnés (0=dim … 6=sam)
 
 function openSchedModal() {
     if (basket.size === 0) return showAlert('Aucun poste dans la sélection.')
-    _schedType = ''
+    _schedType  = ''
+    _schedMode  = 'once'
+    _schedRecur = 'daily'
+    _schedDays  = []
     document.querySelectorAll('.sched-type-card').forEach(c => c.classList.remove('selected'))
     document.getElementById('sched-script-row').style.display  = 'none'
     document.getElementById('sched-creds-row').style.display   = 'none'
     document.getElementById('sel-sched-script').innerHTML      = '<option value="">— Choisir un script —</option>'
     document.getElementById('inp-sched-date').value            = ''
     document.getElementById('inp-sched-time').value            = ''
+    document.getElementById('inp-sched-recur-time').value      = ''
+    document.getElementById('inp-sched-description').value     = ''
     document.getElementById('sched-next-btn').disabled         = true
+    // Reset mode toggle
+    document.getElementById('sched-mode-once').classList.add('active')
+    document.getElementById('sched-mode-recur').classList.remove('active')
+    document.getElementById('sched-once-section').style.display  = 'block'
+    document.getElementById('sched-recur-section').style.display = 'none'
+    // Reset recurrence selector
+    document.getElementById('sched-recur-daily').classList.add('selected')
+    document.getElementById('sched-recur-weekly').classList.remove('selected')
+    document.getElementById('sched-days-row').style.display = 'none'
+    document.querySelectorAll('.sched-day-btn').forEach(b => b.classList.remove('selected'))
 
     const globalUser = document.getElementById('inp-user')
     const globalPass = document.getElementById('inp-pass')
@@ -4902,6 +4926,33 @@ function openSchedModal() {
     }).catch(() => {})
 
     document.getElementById('sched-config-modal').style.display = 'flex'
+}
+
+function selectSchedMode(mode) {
+    _schedMode = mode
+    document.getElementById('sched-mode-once').classList.toggle('active', mode === 'once')
+    document.getElementById('sched-mode-recur').classList.toggle('active', mode === 'recur')
+    document.getElementById('sched-once-section').style.display  = mode === 'once'  ? 'block' : 'none'
+    document.getElementById('sched-recur-section').style.display = mode === 'recur' ? 'block' : 'none'
+    _validateSchedForm()
+}
+
+function selectSchedRecur(recur) {
+    _schedRecur = recur
+    document.getElementById('sched-recur-daily').classList.toggle('selected', recur === 'daily')
+    document.getElementById('sched-recur-weekly').classList.toggle('selected', recur === 'weekly')
+    document.getElementById('sched-days-row').style.display = recur === 'weekly' ? 'block' : 'none'
+    _validateSchedForm()
+}
+
+function toggleSchedDay(day) {
+    const idx = _schedDays.indexOf(day)
+    if (idx >= 0) _schedDays.splice(idx, 1)
+    else _schedDays.push(day)
+    document.querySelectorAll('.sched-day-btn').forEach(btn => {
+        btn.classList.toggle('selected', _schedDays.includes(Number(btn.dataset.day)))
+    })
+    _validateSchedForm()
 }
 
 function closeSchedModal() {
@@ -4923,52 +4974,85 @@ function selectSchedType(type) {
 }
 
 function _validateSchedForm() {
-    const hasType   = !!_schedType
-    const hasDt     = !!document.getElementById('inp-sched-date').value && !!document.getElementById('inp-sched-time').value
+    const hasType  = !!_schedType
+    let hasWhen    = false
+    if (_schedMode === 'once') {
+        hasWhen = !!document.getElementById('inp-sched-date').value && !!document.getElementById('inp-sched-time').value
+    } else {
+        const hasTime = !!document.getElementById('inp-sched-recur-time').value
+        const hasDays = _schedRecur === 'daily' || _schedDays.length > 0
+        hasWhen = hasTime && hasDays
+    }
     const hasCreds  = _schedType === 'wol' ||
         (document.getElementById('inp-sched-user').value.trim() && document.getElementById('inp-sched-pass').value)
     const hasScript = _schedType !== 'script' || !!document.getElementById('sel-sched-script').value
-    document.getElementById('sched-next-btn').disabled = !(hasType && hasDt && hasCreds && hasScript)
+    document.getElementById('sched-next-btn').disabled = !(hasType && hasWhen && hasCreds && hasScript)
 }
 
 function openSchedRecap() {
-    const dt = new Date(document.getElementById('inp-sched-date').value + 'T' + document.getElementById('inp-sched-time').value)
-    if (isNaN(dt.getTime()) || dt <= new Date()) return showAlert('La date et l\'heure doivent être dans le futur.')
     const typeLabels = { script:'Script PowerShell', wol:'Wake-on-LAN', reboot:'Redémarrage', shutdown:'Extinction' }
     const typeIcons  = { script:'📜', wol:'⚡', reboot:'🔄', shutdown:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>' }
+    const DAY_NAMES  = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
     const script     = document.getElementById('sel-sched-script').value
-    document.getElementById('sched-recap-icon').innerHTML               = typeIcons[_schedType]
-    document.getElementById('sched-recap-type').textContent             = typeLabels[_schedType]
-    document.getElementById('sched-recap-script').textContent           = script
-    document.getElementById('sched-recap-script-row').style.display     = _schedType === 'script' ? 'flex' : 'none'
-    document.getElementById('sched-recap-targets').innerHTML            = [...basket].map(h => `<span class="sched-target-pill">${escHtml(h)}</span>`).join('')
-    document.getElementById('sched-recap-dt').textContent               = dt.toLocaleString('fr-FR', { dateStyle:'full', timeStyle:'short' })
-    document.getElementById('sched-launch-btn').disabled                = false
-    document.getElementById('sched-launch-btn').textContent             = '✅ Planifier'
+
+    let dtText = ''
+    if (_schedMode === 'once') {
+        const dt = new Date(document.getElementById('inp-sched-date').value + 'T' + document.getElementById('inp-sched-time').value)
+        if (isNaN(dt.getTime()) || dt <= new Date()) return showAlert('La date et l\'heure doivent être dans le futur.')
+        dtText = dt.toLocaleString('fr-FR', { dateStyle:'full', timeStyle:'short' })
+    } else {
+        const time = document.getElementById('inp-sched-recur-time').value
+        if (_schedRecur === 'daily') {
+            dtText = `🔁 Tous les jours à ${time}`
+        } else {
+            const days = [..._schedDays].sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)).map(d => DAY_NAMES[d])
+            dtText = `🔁 ${days.join(', ')} à ${time}`
+        }
+    }
+
+    document.getElementById('sched-recap-icon').innerHTML           = typeIcons[_schedType]
+    document.getElementById('sched-recap-type').textContent         = typeLabels[_schedType]
+    document.getElementById('sched-recap-script').textContent       = script
+    document.getElementById('sched-recap-script-row').style.display = _schedType === 'script' ? 'flex' : 'none'
+    document.getElementById('sched-recap-targets').innerHTML        = [...basket].map(h => `<span class="sched-target-pill">${escHtml(h)}</span>`).join('')
+    document.getElementById('sched-recap-dt').textContent           = dtText
+    document.getElementById('sched-launch-btn').disabled            = false
+    document.getElementById('sched-launch-btn').textContent         = '✅ Planifier'
     document.getElementById('sched-config-modal').style.display = 'none'
     document.getElementById('sched-recap-modal').style.display  = 'flex'
 }
 
 async function launchSchedule() {
-    const dt       = new Date(document.getElementById('inp-sched-date').value + 'T' + document.getElementById('inp-sched-time').value)
     const script   = document.getElementById('sel-sched-script').value
     const username = document.getElementById('inp-sched-user').value.trim()
     const password = document.getElementById('inp-sched-pass').value
     const targets  = [...basket]
-    const typeLabels = { script:'Script PowerShell', wol:'Wake-on-LAN', reboot:'Redémarrage', shutdown:'Extinction' }
-    const label    = `${typeLabels[_schedType]}${script ? ' — ' + script : ''} sur ${targets.length} poste(s)`
     const btn      = document.getElementById('sched-launch-btn')
     btn.disabled   = true; btn.textContent = '⏳ Planification...'
     try {
-        const body = { type: _schedType, targets, at: dt.toISOString(), label, throttle: parseInt(document.getElementById('inp-throttle').value) || 10 }
+        const body = { type: _schedType, targets, throttle: parseInt(document.getElementById('inp-throttle').value) || 10 }
         if (script)   body.script   = script
         if (username) body.username = username
         if (password) body.password = password
+
+        if (_schedMode === 'once') {
+            const dt = new Date(document.getElementById('inp-sched-date').value + 'T' + document.getElementById('inp-sched-time').value)
+            const typeLabels = { script:'Script PowerShell', wol:'Wake-on-LAN', reboot:'Redémarrage', shutdown:'Extinction' }
+            body.at         = dt.toISOString()
+            body.recurrence = 'once'
+            body.label      = `${typeLabels[_schedType]}${script ? ' — ' + script : ''} sur ${targets.length} poste(s)`
+        } else {
+            body.recurrence  = _schedRecur
+            body.time        = document.getElementById('inp-sched-recur-time').value
+            body.description = document.getElementById('inp-sched-description').value.trim()
+            if (_schedRecur === 'weekly') body.daysOfWeek = _schedDays
+        }
+
         const res  = await fetch('/api/schedule', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
         const data = await res.json()
-        if (!data.ok) throw new Error(data.error || 'Erreur inconnue')
+        if (!data.ok && !data.id) throw new Error(data.error || 'Erreur inconnue')
         closeSchedModal()
-        showAlert(`✅ Tâche planifiée !\n${label}\n${dt.toLocaleString('fr-FR')}`)
+        showAlert(_schedMode === 'recur' ? '✅ Tâche récurrente créée !' : '✅ Tâche planifiée !')
     } catch(e) {
         showAlert(`Erreur : ${e.message}`)
         btn.disabled = false; btn.textContent = '✅ Planifier'
@@ -4982,16 +5066,31 @@ async function openSchedList() {
     try {
         const res  = await fetch('/api/schedules')
         const list = await res.json()
-        if (!list.length) { body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:28px 0;text-align:center;">Aucune tâche planifiée en attente</div>'; return }
+        if (!list.length) { body.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:28px 0;text-align:center;">Aucune tâche planifiée</div>'; return }
         const typeLabels = { script:'Script PS', wol:'Wake-on-LAN', reboot:'Redémarrage', shutdown:'Extinction' }
         const typeIcons  = { script:'📜', wol:'⚡', reboot:'🔄', shutdown:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>' }
         body.innerHTML = list.map(t => {
+            const isRecur = t.recurrence && t.recurrence !== 'once'
+            const icon    = typeIcons[t.type] || '📅'
+            const label   = `${typeLabels[t.type] || t.type}${t.script ? ' — ' + escHtml(t.script) : ''}`
+            if (isRecur) {
+                const nextDt = t.nextRunAt ? new Date(t.nextRunAt) : null
+                const desc   = t.description || t.label || ''
+                return `<div class="sched-task-row">
+                    <span class="sched-task-icon">🔁</span>
+                    <div class="sched-task-info">
+                        <div class="sched-task-label">${label}${desc ? ' · ' + escHtml(desc) : ''}</div>
+                        <div class="sched-task-meta">${escHtml(t.summary || '')} · ${t.targets.length} poste(s)${nextDt ? ' · Prochaine : ' + nextDt.toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}) : ''}${t.runCount ? ' · ' + t.runCount + ' exéc.' : ''}</div>
+                    </div>
+                    <button onclick="cancelSchedule('${escHtml(t.id)}', this)" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;cursor:pointer;padding:3px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0;">✕ Supprimer</button>
+                </div>`
+            }
             const dt      = new Date(t.at)
             const preview = t.targets.slice(0,3).map(h => escHtml(h)).join(', ') + (t.targets.length > 3 ? ` +${t.targets.length-3}` : '')
             return `<div class="sched-task-row">
-                <span class="sched-task-icon">${typeIcons[t.type] || '📅'}</span>
+                <span class="sched-task-icon">${icon}</span>
                 <div class="sched-task-info">
-                    <div class="sched-task-label">${escHtml(typeLabels[t.type] || t.type)}${t.script ? ' — ' + escHtml(t.script) : ''}</div>
+                    <div class="sched-task-label">${label}</div>
                     <div class="sched-task-meta">${dt.toLocaleString('fr-FR')} · ${t.targets.length} poste(s) : ${preview}</div>
                 </div>
                 <button onclick="cancelSchedule('${escHtml(t.id)}', this)" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;cursor:pointer;padding:3px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0;">✕ Annuler</button>
@@ -5735,12 +5834,54 @@ function settingsShutdownServer() {
         <div id="sched-targets-list" style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;background:var(--card2);border:1px solid var(--border);border-radius:8px;min-height:36px;"></div>
       </div>
       <div>
-        <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">Date et heure d'exécution</div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="inp-sched-date" type="date" oninput="_validateSchedForm()"
-            style="flex:1;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box;">
-          <input id="inp-sched-time" type="time" oninput="_validateSchedForm()"
-            style="width:110px;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box;">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">Planification</div>
+        <div class="sched-mode-toggle">
+          <button class="sched-mode-btn active" id="sched-mode-once" onclick="selectSchedMode('once')">📅 Ponctuelle</button>
+          <button class="sched-mode-btn" id="sched-mode-recur" onclick="selectSchedMode('recur')">🔁 Récurrente</button>
+        </div>
+        <!-- Mode ponctuel -->
+        <div id="sched-once-section">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="inp-sched-date" type="date" oninput="_validateSchedForm()"
+              style="flex:1;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box;">
+            <input id="inp-sched-time" type="time" oninput="_validateSchedForm()"
+              style="width:110px;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box;">
+          </div>
+        </div>
+        <!-- Mode récurrent -->
+        <div id="sched-recur-section" style="display:none;">
+          <div style="display:flex;gap:6px;margin-bottom:10px;">
+            <div class="sched-type-card selected" id="sched-recur-daily" data-recur="daily" onclick="selectSchedRecur('daily')" style="flex:1;padding:9px 8px;">
+              <span style="font-size:12px;font-weight:700;color:var(--text);">Tous les jours</span>
+            </div>
+            <div class="sched-type-card" id="sched-recur-weekly" data-recur="weekly" onclick="selectSchedRecur('weekly')" style="flex:1;padding:9px 8px;">
+              <span style="font-size:12px;font-weight:700;color:var(--text);">Hebdomadaire</span>
+            </div>
+          </div>
+          <div id="sched-days-row" style="display:none;margin-bottom:10px;">
+            <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;">Jours</div>
+            <div class="sched-day-grid">
+              <button class="sched-day-btn" data-day="1" onclick="toggleSchedDay(1)">Lun</button>
+              <button class="sched-day-btn" data-day="2" onclick="toggleSchedDay(2)">Mar</button>
+              <button class="sched-day-btn" data-day="3" onclick="toggleSchedDay(3)">Mer</button>
+              <button class="sched-day-btn" data-day="4" onclick="toggleSchedDay(4)">Jeu</button>
+              <button class="sched-day-btn" data-day="5" onclick="toggleSchedDay(5)">Ven</button>
+              <button class="sched-day-btn" data-day="6" onclick="toggleSchedDay(6)">Sam</button>
+              <button class="sched-day-btn" data-day="0" onclick="toggleSchedDay(0)">Dim</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;">
+            <div style="flex:0 0 110px;">
+              <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;">Heure</div>
+              <input id="inp-sched-recur-time" type="time" oninput="_validateSchedForm()"
+                style="width:100%;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box;">
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;">Description (optionnel)</div>
+              <input id="inp-sched-description" type="text" placeholder="Ex : Extinction soir CDI"
+                style="width:100%;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;box-sizing:border-box;">
+            </div>
+          </div>
         </div>
       </div>
     </div>
