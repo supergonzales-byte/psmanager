@@ -636,6 +636,17 @@ header {
 .sunrise .splash-logo-ps { color:#a08af0; }
 .sunset .splash-logo-ps  { color:#f0834a; }
 .splash-logo-mg  { color:#ffffff; }
+
+.sunset #splash {
+  background: rgba(18,6,12,.65);
+  backdrop-filter: blur(18px) saturate(1.2) hue-rotate(330deg);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2) hue-rotate(330deg);
+}
+.sunset .splash-card {
+  background: rgba(44,20,30,.82);
+  border-color: rgba(212,111,160,.25);
+  box-shadow: 0 20px 60px rgba(0,0,0,.65), 0 0 40px rgba(240,131,74,.08), inset 0 1px 0 rgba(255,180,120,.08);
+}
 .splash-sub {
   font-family:var(--mono);
   font-size:10px;
@@ -671,7 +682,7 @@ header {
 .splash-field input::placeholder { color:rgba(255,255,255,.35); }
 .splash-field input:focus {
   border-color:var(--accent);
-  box-shadow:0 0 0 3px rgba(212,113,74,.15);
+  box-shadow:0 0 0 3px var(--focus-ring);
 }
 .splash-field input[type=password] { letter-spacing:.12em; }
 .splash-btn {
@@ -687,9 +698,9 @@ header {
   font-weight:600;
   cursor:pointer;
   transition:all .2s;
-  box-shadow:0 4px 14px rgba(212,113,74,.35);
+  box-shadow:0 4px 14px var(--btn-shadow);
 }
-.splash-btn:hover { background:var(--accent2); transform:translateY(-1px); box-shadow:0 6px 20px rgba(212,113,74,.45); }
+.splash-btn:hover { background:var(--accent2); transform:translateY(-1px); box-shadow:0 6px 20px var(--btn-shadow-h); }
 .splash-btn:active { transform:translateY(0); }
 .splash-error {
   font-size:12px;
