@@ -27,7 +27,7 @@ PSManager est une application Node.js permettant d'administrer à distance un pa
 - **Aspiration / déploiement de drivers**
 - **Historique des logins**
 - **Installation de logiciels** à distance (.exe / .msi)
-- **Déploiement Veyon** — installation automatisée avec gestion de la clé privée prof et import des postes élèves depuis l'AD (LDAP)
+- **Déploiement Veyon** — installation automatisée avec gestion des clés et import des postes supervisés depuis l'AD (LDAP)
 - **Authentification LDAP/AD** avec vérification d'appartenance à un groupe
 - **Interface responsive** — utilisable sur smartphone (navigation par onglets bas d'écran)
 - **4 thèmes** : Jour, Nuit, Aurore, Couchant
@@ -65,13 +65,13 @@ Le déploiement Veyon requiert 4 fichiers dans `C:\ps-manager\veyon\` :
 - `veyon-x.x.x-win64-setup.exe` — installeur Veyon
 - `veyon_configuration.json` — configuration exportée depuis Veyon Master
 - `publickey` — clé publique
-- `key` — clé privée (postes prof uniquement)
+- `key` — clé privée (postes maîtres uniquement)
 
 Les fichiers peuvent être déposés directement depuis la modale de déploiement (drag & drop ou sélection).
 
-**Détection automatique du poste prof** : un poste dont le hostname se termine par `-P` suivi de 2 chiffres (ex : `SALLE01-PC-P01`) est traité comme poste professeur. Veyon y reçoit la clé privée et la liste des postes élèves récupérée automatiquement depuis l'AD via LDAP.
+**Détection automatique du poste maître** : un poste dont le hostname se termine par `-P` suivi de 2 chiffres (ex : `ZONE01-PC-P01`) est traité comme poste maître. Veyon y reçoit la clé privée et la liste des postes supervisés récupérée automatiquement depuis l'AD via LDAP.
 
-L'OU AD du poste prof doit contenir `Poste_Prof` ou `Postes_Prof` (variantes acceptées : avec `_`, `-`, espace ou sans séparateur, insensible à la casse) si le poste est seul dans son OU.
+L'OU AD du poste maître doit contenir `Poste_Prof` ou `Postes_Prof` (variantes acceptées : avec `_`, `-`, espace ou sans séparateur, insensible à la casse) si le poste est seul dans son OU.
 
 ## Stack
 
