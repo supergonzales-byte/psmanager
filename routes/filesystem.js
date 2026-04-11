@@ -7,16 +7,16 @@ const { listDirectory, downloadFile, downloadDirectory, deleteRemote, mkdirRemot
 
 const router = express.Router()
 
-router.get('/fs/list', async (req, res) => {
-    const { hostname, username, password, path: remotePath } = req.query
+router.post('/fs/list', async (req, res) => {
+    const { hostname, username, password, path: remotePath } = req.body
     if (!hostname || !username || !password || !remotePath)
         return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
     const result = await listDirectory({ hostname, username, password, remotePath })
     res.json(result)
 })
 
-router.get('/fs/download', async (req, res) => {
-    const { hostname, username, password, path: remotePath, isDir } = req.query
+router.post('/fs/download', async (req, res) => {
+    const { hostname, username, password, path: remotePath, isDir } = req.body
     if (!hostname || !username || !password || !remotePath)
         return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
 
@@ -49,11 +49,11 @@ router.post('/fs/upload', multerFs.single('file'), async (req, res) => {
     res.json(result)
 })
 
-router.delete('/fs/delete', async (req, res) => {
-    const { hostname, username, password, path: remotePath, isDir } = req.query
+router.post('/fs/delete', async (req, res) => {
+    const { hostname, username, password, path: remotePath, isDir } = req.body
     if (!hostname || !username || !password || !remotePath)
         return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
-    const result = await deleteRemote({ hostname, username, password, remotePath, isDir: isDir === 'true' })
+    const result = await deleteRemote({ hostname, username, password, remotePath, isDir: isDir === true || isDir === 'true' })
     res.json(result)
 })
 

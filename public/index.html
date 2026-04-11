@@ -3366,8 +3366,7 @@ async function fsLoad(remotePath) {
     fsBreadcrumb(remotePath)
 
     try {
-        const params = new URLSearchParams({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath })
-        const res  = await fetch(`/api/fs/list?${params}`)
+        const res  = await fetch('/api/fs/list', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath }) })
         const data = await res.json()
 
         if (!data.ok) {
@@ -3458,8 +3457,7 @@ async function fsDownload() {
         : `${spin} Téléchargement de ${displayName}...`)
 
     try {
-        const params = new URLSearchParams({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath, isDir: isDir ? 'true' : 'false' })
-        const res = await fetch(`/api/fs/download?${params}`)
+        const res = await fetch('/api/fs/download', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath, isDir: isDir ? 'true' : 'false' }) })
         if (!res.ok) {
             const err = await res.json()
             fsSetStatus(`✖ Erreur : ${err.error}`)
@@ -3487,8 +3485,7 @@ async function fsDelete() {
     showConfirm(icon, `Supprimer <strong>${escHtml(name)}</strong>${isDir ? ' et tout son contenu' : ''} ?`, async () => {
         fsSetStatus(`🗑 Suppression de ${name}...`)
         try {
-            const params = new URLSearchParams({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath, isDir })
-            const res  = await fetch(`/api/fs/delete?${params}`, { method: 'DELETE' })
+            const res  = await fetch('/api/fs/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath, isDir }) })
             const data = await res.json()
             if (data.ok) { fsSetStatus(`✔ Supprimé : ${name}`); fsRefresh() }
             else          fsSetStatus(`✖ Erreur : ${data.error}`)
