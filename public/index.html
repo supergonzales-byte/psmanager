@@ -1159,7 +1159,6 @@ header {
           <option value="copy-files">📂 Copier des fichiers</option>
           <option value="collect-drivers">💾 Aspirer les drivers</option>
           <option value="deploy-drivers">🚀 Déployer les drivers</option>
-          <option value="schedule">📅 Planifier</option>
           <option value="login-history">📋 Historique des logins</option>
           <option value="install-software">📦 Installer un logiciel</option>
           <option value="deploy-veyon">🖥️ Déployer Veyon</option>
@@ -1186,12 +1185,6 @@ header {
           📂 Choisissez le modèle de drivers à déployer.<br>
           ⚠️ Tous les postes sélectionnés doivent être du même modèle.
         </div>
-      </div>
-
-      <!-- Panneau planification -->
-      <div id="panel-schedule" style="display:none;">
-        <button class="btn btn-outline" onclick="openSchedModal()" style="width:100%;margin-top:8px;">📅 Configurer la planification…</button>
-        <button class="btn btn-outline" onclick="openSchedList()" style="width:100%;margin-top:6px;font-size:11px;color:var(--muted);">📋 Voir les tâches planifiées</button>
       </div>
 
       <!-- Panneau historique logins -->
@@ -1233,6 +1226,13 @@ header {
 
       <button class="btn btn-outline" id="btn-run-action" onclick="runSelectedAction()"
         style="margin-top:8px;width:100%;display:none;">▶ Exécuter</button>
+    </div>
+
+    <!-- Planification -->
+    <div class="config-card" style="margin-top:8px;">
+      <div class="card-title">📅 PLANIFICATION</div>
+      <button class="btn btn-outline" onclick="openSchedModal()" style="width:100%;margin-top:6px;">📅 Configurer une tâche…</button>
+      <button class="btn btn-outline" onclick="openSchedList()" style="width:100%;margin-top:6px;font-size:11px;color:var(--muted);">📋 Voir les tâches planifiées</button>
     </div>
 
     <div class="config-card" style="margin-top:8px;">
@@ -3299,12 +3299,11 @@ function onActionChange() {
     document.getElementById('panel-copy-files').style.display      = val === 'copy-files'       ? 'block' : 'none'
     document.getElementById('panel-collect-drivers').style.display = val === 'collect-drivers'  ? 'block' : 'none'
     document.getElementById('panel-deploy-drivers').style.display  = val === 'deploy-drivers'   ? 'block' : 'none'
-    document.getElementById('panel-schedule').style.display        = val === 'schedule'         ? 'block' : 'none'
     document.getElementById('panel-login-history').style.display   = val === 'login-history'    ? 'block' : 'none'
     document.getElementById('panel-install-software').style.display = val === 'install-software' ? 'block' : 'none'
     document.getElementById('panel-deploy-veyon').style.display    = val === 'deploy-veyon'      ? 'block' : 'none'
     document.getElementById('panel-file-explorer') && (document.getElementById('panel-file-explorer').style.display = 'none')
-    document.getElementById('btn-run-action').style.display        = (val && val !== 'copy-files' && val !== 'schedule' && val !== 'login-history') ? 'block' : 'none'
+    document.getElementById('btn-run-action').style.display        = (val && val !== 'copy-files' && val !== 'login-history') ? 'block' : 'none'
     if (val === 'deploy-veyon') loadVeyonFilesList()
 }
 
