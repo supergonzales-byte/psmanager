@@ -5249,7 +5249,13 @@ function settingsShutdownServer() {
       </div>
 
       <div class="inv-opt">
-        <input type="checkbox" id="scan-do-inv" checked onchange="document.getElementById('scan-exclude-known').disabled=!this.checked;document.getElementById('lbl-exclude-known').style.opacity=this.checked?'1':'.4'">
+        <input type="checkbox" id="scan-do-inv" checked onchange="
+          document.getElementById('scan-exclude-known').disabled=!this.checked;
+          document.getElementById('lbl-exclude-known').style.opacity=this.checked?'1':'.4';
+          document.getElementById('scan-do-lldp').disabled=!this.checked;
+          if(!this.checked) document.getElementById('scan-do-lldp').checked=false;
+          document.getElementById('lbl-scan-lldp').style.opacity=this.checked?'1':'.4';
+        ">
         <label for="scan-do-inv">Faire l'inventaire WinRM après le scan</label>
       </div>
       <div class="inv-opt" style="margin-top:5px;">
@@ -5258,7 +5264,7 @@ function settingsShutdownServer() {
       </div>
       <div class="inv-opt" style="margin-top:5px;border-color:#bbf7d0;background:var(--green-l);">
         <input type="checkbox" id="scan-do-lldp">
-        <label for="scan-do-lldp" style="color:var(--green);">🔌 Effectuer le scan LLDP</label>
+        <label id="lbl-scan-lldp" for="scan-do-lldp" style="color:var(--green);">🔌 Effectuer le scan LLDP</label>
       </div>
 
       <div class="scan-phase" id="scan-phase">En attente...</div>
