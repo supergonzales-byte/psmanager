@@ -770,6 +770,261 @@ header {
 .copy-stat-tile { background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; text-align:center; }
 .copy-stat-tile .cs-val { font-size:18px; font-weight:700; color:var(--accent); }
 .copy-stat-tile .cs-lbl { font-size:10px; color:var(--muted); margin-top:2px; font-weight:600; letter-spacing:.04em; }
+/* ═══════════════════════════════════════════════════════════
+   ─── MODE MOBILE / SMARTPHONE ───
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Barre de navigation mobile (bottom tabs) ── */
+.mobile-nav {
+  display:none;
+  position:fixed; bottom:0; left:0; right:0; z-index:90;
+  background:var(--brown2);
+  border-top:2px solid var(--accent);
+  height:56px;
+  padding:0 4px;
+  align-items:stretch; justify-content:space-around;
+  box-shadow:0 -2px 12px rgba(0,0,0,.3);
+}
+.mobile-nav-btn {
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:3px; background:none; border:none; color:#90a4c0; cursor:pointer;
+  font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.02em;
+  transition:color .15s;
+  padding:4px 0;
+  -webkit-tap-highlight-color:transparent;
+}
+.mobile-nav-btn svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.mobile-nav-btn.active { color:var(--accent); }
+.mobile-nav-btn .nav-badge {
+  position:absolute; top:4px; right:calc(50% - 18px);
+  background:var(--accent); color:#fff; font-size:9px; font-weight:700;
+  min-width:16px; height:16px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  padding:0 4px;
+}
+
+@media (max-width: 900px) {
+  /* ── Navigation mobile visible ── */
+  .mobile-nav { display:flex; }
+
+  /* ── Header condensé ── */
+  header {
+    padding:0 12px;
+    height:48px;
+    gap:6px;
+  }
+  .logo-ps { font-size:20px; }
+  .logo-mg { font-size:20px; }
+  .logo-sub { display:none; }
+  .hdr-right { gap:8px; }
+  .hdr-stat { display:none; }
+  .btn-theme, .btn-logout, .btn-settings { width:30px; height:30px; }
+
+  /* ── Layout passe en single-column ── */
+  .layout {
+    display:flex !important;
+    flex-direction:column;
+    grid-template-columns:none !important;
+  }
+
+  /* ── Panneaux : un seul visible à la fois ── */
+  .pane-left, .pane-center, .pane-right {
+    display:none !important;
+    width:100% !important;
+    border:none !important;
+    flex:1;
+    overflow-y:auto;
+  }
+  .pane-left.mobile-active,
+  .pane-center.mobile-active,
+  .pane-right.mobile-active {
+    display:flex !important;
+  }
+
+  /* ── Body : marges pour header + bottom nav ── */
+  body { padding-bottom:56px; }
+
+  /* ── Toolbar : scroll horizontal ── */
+  .toolbar {
+    padding:8px 10px;
+    gap:6px;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    flex-wrap:nowrap;
+  }
+  .toolbar::-webkit-scrollbar { display:none; }
+  .toolbar input { min-width:140px; flex:0 0 auto; font-size:12px; padding:7px 10px; }
+  .tb-btn { flex:0 0 auto; font-size:11px; padding:7px 10px; white-space:nowrap; }
+
+  /* ── Group actions : toujours visibles sur mobile (pas de hover) ── */
+  .group-actions { opacity:1 !important; }
+  .host-btns { opacity:1 !important; }
+
+  /* ── Grilles en 1 colonne ── */
+  .scan-grid,
+  .detail-grid,
+  .lldp-grid,
+  .col-grid,
+  .sched-type-grid,
+  .sgs-grid,
+  .pwr-grid { grid-template-columns:1fr !important; }
+
+  /* ── Modales plein écran ── */
+  .modal {
+    width:100% !important;
+    max-width:100vw !important;
+    height:100vh;
+    max-height:100vh !important;
+    border-radius:0 !important;
+    border:none !important;
+  }
+  .modal-header { padding:12px 14px; }
+  .modal-body { padding:12px 14px; }
+  .modal-footer { padding:10px 14px; gap:6px; flex-wrap:wrap; }
+  .modal-footer .btn { flex:1; min-width:0; font-size:12px; }
+
+  /* Modales inline aussi */
+  #action-modal > div {
+    width:100% !important;
+    min-width:0 !important;
+    max-width:100vw !important;
+    border-radius:0 !important;
+    height:100vh;
+    max-height:100vh !important;
+  }
+
+  /* ── Confirm box ── */
+  .confirm-box {
+    min-width:0 !important;
+    max-width:calc(100vw - 32px) !important;
+    width:calc(100vw - 32px);
+  }
+
+  /* ── Explorateur fichiers ── */
+  .reg-layout { grid-template-columns:1fr !important; grid-template-rows:200px 1fr; }
+  .reg-tree { border-right:none !important; border-bottom:1px solid var(--border); }
+  .reg-row { grid-template-columns:1fr 70px 1fr 28px 28px !important; gap:4px; }
+  .fs-item-date { display:none; }
+  .fs-item-size { min-width:50px; font-size:9px; }
+  .fs-toolbar { flex-wrap:wrap; gap:4px; }
+  .fs-tbtn { font-size:11px; padding:5px 8px; }
+  .fs-breadcrumb { gap:2px; padding:6px 10px; }
+
+  /* ── Splash login responsive ── */
+  .splash-card {
+    width:calc(100vw - 32px) !important;
+    max-width:400px;
+    padding:32px 24px !important;
+  }
+  .splash-logo { font-size:34px; }
+  .splash-sub { font-size:9px; margin-bottom:24px; }
+
+  /* ── Config cards ── */
+  .config-card { margin:8px 8px; padding:10px 12px; }
+  .section-title { padding:7px 12px; font-size:8px; }
+
+  /* ── Basket items ── */
+  .basket-item { padding:6px 8px; }
+  .basket-item-name { font-size:10px; }
+
+  /* ── Host rows ── */
+  .host-row { padding:8px 6px; gap:6px; }
+  .host-name { font-size:11px; }
+  .host-meta { font-size:9px; }
+  .hbtn { width:32px; height:32px; }
+
+  /* ── Group headers ── */
+  .group-header { padding:10px 10px; gap:8px; }
+  .group-name { font-size:13px; }
+
+  /* ── Power buttons ── */
+  .pwr-btn { padding:12px 8px; }
+  .pwr-btn span { font-size:11px; }
+
+  /* ── Run modal ── */
+  .run-host-name { min-width:0; font-size:11px; }
+  .run-host-row { flex-direction:column; align-items:stretch; gap:4px; padding:8px 10px; }
+  .run-summary { gap:12px; flex-wrap:wrap; font-size:11px; padding:8px 10px; }
+
+  /* ── Statusbar ── */
+  .statusbar {
+    padding:4px 12px;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .statusbar span { font-size:9px; }
+
+  /* ── Session table ── */
+  .session-table { font-size:11px; }
+  .session-table th, .session-table td { padding:6px 8px; }
+
+  /* ── Terminal ── */
+  .ps-terminal-wrap { height:320px; }
+
+  /* ── Copy file modal ── */
+  .copy-stat-tile .cs-val { font-size:14px; }
+
+  /* ── Selmod ── */
+  .selmod {
+    width:100vw !important;
+    max-width:100vw !important;
+    height:100vh;
+    max-height:100vh !important;
+    border-radius:0 !important;
+  }
+  #inst-grid { grid-template-columns:1fr !important; }
+
+  /* ── WOL ── */
+  .wol-row { flex-wrap:wrap; gap:6px; }
+  .wol-row .wh-status { min-width:0; text-align:left; }
+
+  /* ── Logiciels ── */
+  .soft-header { flex-direction:column; align-items:flex-start; gap:6px; }
+  .soft-search { width:100%; }
+
+  /* ── Warranty / Detail ── */
+  .detail-field.df-full { grid-column:auto; }
+
+  /* ── Settings modals inline ── */
+  [style*="width:560px"],
+  [style*="width:500px"],
+  [style*="width:520px"],
+  [style*="width:460px"],
+  [style*="width:480px"],
+  [style*="width:780px"] {
+    width:100vw !important;
+    max-width:100vw !important;
+    border-radius:0 !important;
+  }
+
+  /* ── Throttle ── */
+  .throttle-row { flex-wrap:wrap; }
+
+  /* ── Disque bar ── */
+  .disk-label { font-size:10px; }
+}
+
+/* ── Extra petit (< 400px) ── */
+@media (max-width: 400px) {
+  header { padding:0 8px; height:44px; }
+  .logo-ps, .logo-mg { font-size:17px; }
+  .btn-theme, .btn-logout, .btn-settings { width:28px; height:28px; }
+  .hdr-right { gap:6px; }
+
+  .toolbar { padding:6px 8px; }
+  .toolbar input { min-width:100px; font-size:11px; }
+  .tb-btn { font-size:10px; padding:6px 8px; }
+
+  .group-name { font-size:12px; }
+  .host-name { font-size:10px; }
+  .hbtn { width:28px; height:28px; }
+
+  .mobile-nav { height:52px; }
+  .mobile-nav-btn { font-size:9px; }
+  .mobile-nav-btn svg { width:18px; height:18px; }
+
+  body { padding-bottom:52px; }
+}
 </style>
 </head>
 <body>
@@ -1053,6 +1308,60 @@ header {
   <span id="sb-status">Prêt</span>
   <span id="sb-parc"></span>
 </div>
+
+<!-- NAVIGATION MOBILE (bottom tabs) -->
+<nav class="mobile-nav" id="mobile-nav">
+  <button class="mobile-nav-btn active" data-pane="left" onclick="mobileSwitch('left')">
+    <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+    Config
+  </button>
+  <button class="mobile-nav-btn" data-pane="center" onclick="mobileSwitch('center')">
+    <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    Postes
+  </button>
+  <button class="mobile-nav-btn" data-pane="right" onclick="mobileSwitch('right')" style="position:relative;">
+    <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+    <span id="mobile-basket-badge" class="nav-badge" style="display:none;">0</span>
+    Sélection
+  </button>
+</nav>
+
+<script>
+// ══ Navigation mobile ══
+function mobileSwitch(pane) {
+  const panes = { left: '.pane-left', center: '.pane-center', right: '.pane-right' };
+  Object.values(panes).forEach(sel => document.querySelector(sel)?.classList.remove('mobile-active'));
+  const target = document.querySelector(panes[pane]);
+  if (target) target.classList.add('mobile-active');
+  document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.pane === pane));
+}
+
+function updateMobileBasketBadge() {
+  const badge = document.getElementById('mobile-basket-badge');
+  if (!badge) return;
+  const count = basket ? basket.size : 0;
+  badge.textContent = count;
+  badge.style.display = count > 0 ? 'flex' : 'none';
+}
+
+// Init mobile : activer panneau central par défaut sur mobile
+function initMobile() {
+  if (window.innerWidth <= 900) {
+    mobileSwitch('center');
+  }
+}
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 900) {
+    // Desktop : remettre tous les panneaux visibles
+    document.querySelectorAll('.pane-left,.pane-center,.pane-right').forEach(p => p.classList.remove('mobile-active'));
+  } else {
+    // Vérifier qu'un panneau est actif
+    const anyActive = document.querySelector('.pane-left.mobile-active,.pane-center.mobile-active,.pane-right.mobile-active');
+    if (!anyActive) mobileSwitch('center');
+  }
+});
+document.addEventListener('DOMContentLoaded', initMobile);
+</script>
 
 <script>
 // ══ État global ══
@@ -2712,6 +3021,7 @@ function updateBasket() {
   document.getElementById('basket-count').textContent = `${basket.size} poste(s)`
   document.getElementById('basket-total').textContent = `Total : ${basket.size} poste(s)`
   document.getElementById('hdr-sel').textContent = basket.size
+  if (typeof updateMobileBasketBadge === 'function') updateMobileBasketBadge();
 
   if (basket.size === 0) {
     scroll.innerHTML = '<div class="basket-empty">Aucun poste<br>dans la sélection.</div>'
