@@ -751,6 +751,16 @@ header {
 .sgs-card .sgs-name { font-size:12px; font-weight:600; color:var(--text); font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sgs-card.selected .sgs-name { color:var(--accent); }
 .sgs-empty { text-align:center; color:var(--muted); font-size:12px; padding:24px 0; }
+/* ── Carte commande manuelle ── */
+.sgs-card-manual { grid-column:1/-1; border-style:dashed; flex-direction:column; align-items:stretch; }
+.sgs-card-manual.open { border-color:var(--accent); background:var(--accent-l2); border-style:solid; }
+.sgs-manual-body { display:none; width:100%; margin-top:8px; }
+.sgs-card-manual.open .sgs-manual-body { display:block; }
+.sgs-manual-body textarea { width:100%; box-sizing:border-box; background:var(--surface); border:1.5px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text); font-family:var(--mono); font-size:11px; outline:none; resize:vertical; min-height:90px; transition:border-color .2s; }
+.sgs-manual-body textarea:focus { border-color:var(--accent); }
+.sgs-manual-confirm { margin-top:6px; display:flex; justify-content:flex-end; }
+.sgs-manual-confirm button { font-size:11px; padding:5px 14px; border-radius:6px; border:none; background:var(--accent); color:#fff; cursor:pointer; font-weight:600; }
+.sgs-manual-confirm button:hover { filter:brightness(1.1); }
 #inst-grid { grid-template-columns: 1fr; }
 #inst-grid .sgs-card { overflow:hidden; }
 .sgs-args { font-size:10px; font-family:var(--mono); color:var(--accent); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default; }
@@ -2239,23 +2249,38 @@ async function loadScripts() {
   }
 }
 
+const _MANUAL_CARD_HTML = `
+  <div class="sgs-card sgs-card-manual" id="sgs-card-manual" onclick="toggleManualCard(event)">
+    <div style="display:flex;align-items:center;gap:10px;width:100%;">
+      <span class="sgs-ico">✏️</span>
+      <span class="sgs-name" style="color:var(--text2);">Commande manuelle…</span>
+    </div>
+    <div class="sgs-manual-body" onclick="event.stopPropagation()">
+      <textarea id="inp-manual-script" placeholder="Écris tes commandes PowerShell ici…&#10;Ex: Get-Process | Where-Object CPU -gt 10 | Select-Object Name,CPU"></textarea>
+      <div class="sgs-manual-confirm">
+        <button onclick="confirmManualScript()">✔ Utiliser cette commande</button>
+      </div>
+    </div>
+  </div>`
+
 function _buildScriptGrid(list) {
   const grid  = document.getElementById('sgs-grid')
   const empty = document.getElementById('sgs-empty')
-  if (!list.length) {
-    grid.innerHTML = ''
-    empty.textContent = 'Aucun script disponible'
-    empty.style.display = 'block'
-    return
-  }
   empty.style.display = 'none'
   const cur = document.getElementById('sel-script').value
   grid.innerHTML = list.map(s => `
     <div class="sgs-card${s === cur ? ' selected' : ''}" data-name="${s}" onclick="pickScript('${s.replace(/'/g,"\\'")}')">
       <div class="sgs-ico"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
       <div class="sgs-name">${s}</div>
-    </div>`).join('')
+    </div>`).join('') + _MANUAL_CARD_HTML
+  if (!list.length) {
+    empty.textContent = 'Aucun script disponible'
+    empty.style.display = 'block'
+  }
 }
+
+// _scriptBlock stocke le bloc inline quand l'utilisateur saisit manuellement
+let _scriptBlock = null
 
 function openScriptModal() {
   document.getElementById('inp-script-filter').value = ''
@@ -2266,11 +2291,36 @@ function closeScriptModal() {
   document.getElementById('selmod-scripts').classList.remove('open')
 }
 function pickScript(name) {
+  _scriptBlock = null
   document.getElementById('sel-script').value = name
   document.querySelectorAll('#sgs-grid .sgs-card').forEach(c =>
-    c.classList.toggle('selected', c.dataset.name === name))
+    c.classList.toggle('selected', c.dataset.name === name && !c.classList.contains('sgs-card-manual')))
+  document.getElementById('sgs-card-manual').classList.remove('open', 'selected')
   document.getElementById('lbl-sel-script').textContent = name
   document.getElementById('ico-sel-script').innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>'
+  document.getElementById('btn-sel-script').classList.add('has-value')
+  setTimeout(closeScriptModal, 140)
+}
+function toggleManualCard(e) {
+  const card = document.getElementById('sgs-card-manual')
+  const isOpen = card.classList.contains('open')
+  if (isOpen) {
+    card.classList.remove('open')
+  } else {
+    card.classList.add('open')
+    setTimeout(() => document.getElementById('inp-manual-script').focus(), 50)
+  }
+}
+function confirmManualScript() {
+  const block = document.getElementById('inp-manual-script').value.trim()
+  if (!block) return
+  _scriptBlock = block
+  document.getElementById('sel-script').value = ''
+  document.querySelectorAll('#sgs-grid .sgs-card').forEach(c => c.classList.remove('selected'))
+  document.getElementById('sgs-card-manual').classList.add('selected')
+  const preview = block.length > 40 ? block.substring(0, 40).replace(/\n/g,' ') + '…' : block.replace(/\n/g,' ')
+  document.getElementById('lbl-sel-script').textContent = preview
+  document.getElementById('ico-sel-script').innerHTML = '✏️'
   document.getElementById('btn-sel-script').classList.add('has-value')
   setTimeout(closeScriptModal, 140)
 }
@@ -2278,6 +2328,7 @@ function filterScriptModal(q) {
   q = q.toLowerCase()
   let n = 0
   document.querySelectorAll('#sgs-grid .sgs-card').forEach(c => {
+    if (c.classList.contains('sgs-card-manual')) { c.style.display = ''; return }
     const show = c.dataset.name.toLowerCase().includes(q)
     c.style.display = show ? '' : 'none'
     if (show) n++
@@ -3059,14 +3110,15 @@ async function runScript() {
   const password = document.getElementById('inp-pass').value
   const throttle = document.getElementById('inp-throttle').value || 10
 
-  if (!script || script === '-- Sélectionner --') return showNotif('⚠️', 'Sélectionnez un script.')
+  if (!script && !_scriptBlock) return showNotif('⚠️', 'Sélectionnez un script ou saisissez une commande.')
   if (basket.size === 0) return showNotif('⚠️', 'Sélectionnez au moins un poste.')
   if (!username || !password) return showAlert('Identifiants WinRM requis.')
 
-  const targets = [...basket].join(',')
+  const targets  = [...basket].join(',')
+  const runLabel = script || (_scriptBlock.length > 40 ? _scriptBlock.substring(0,40).replace(/\n/g,' ')+'…' : _scriptBlock.replace(/\n/g,' '))
 
   // Init modale
-  document.getElementById('run-modal-title').textContent = `▶ Exécution — ${script}`
+  document.getElementById('run-modal-title').textContent = `▶ Exécution — ${runLabel}`
   document.getElementById('rs-total').textContent  = basket.size
   document.getElementById('rs-ok').textContent     = '0'
   document.getElementById('rs-err').textContent    = '0'
@@ -3086,7 +3138,7 @@ async function runScript() {
   try {
     const init = await fetch('/api/run-init', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ script, targets, username, password, throttle })
+      body: JSON.stringify({ script: script || undefined, scriptBlock: _scriptBlock || undefined, targets, username, password, throttle })
     })
     const data = await init.json()
     if (!data.token) throw new Error(data.error || 'Erreur init')
@@ -4878,7 +4930,8 @@ ${sections}</body></html>`
 }
 
 // ── PLANIFICATION ─────────────────────────────────────────────────────────
-let _schedType = ''
+let _schedType       = ''
+let _schedScriptMode = 'file'  // 'file' | 'manual'
 let _schedMode  = 'once'   // 'once' | 'recur'
 let _schedRecur = 'daily'  // 'daily' | 'weekly'
 let _schedDays  = []       // jours sélectionnés (0=dim … 6=sam)
@@ -4890,9 +4943,11 @@ function openSchedModal() {
     _schedRecur = 'daily'
     _schedDays  = []
     document.querySelectorAll('.sched-type-card').forEach(c => c.classList.remove('selected'))
+    _schedScriptMode = 'file'
     document.getElementById('sched-script-row').style.display  = 'none'
     document.getElementById('sched-creds-row').style.display   = 'none'
     document.getElementById('sel-sched-script').innerHTML      = '<option value="">— Choisir un script —</option>'
+    if (document.getElementById('inp-sched-scriptblock')) document.getElementById('inp-sched-scriptblock').value = ''
     document.getElementById('inp-sched-date').value            = ''
     document.getElementById('inp-sched-time').value            = ''
     document.getElementById('inp-sched-recur-time').value      = ''
@@ -4970,6 +5025,21 @@ function selectSchedType(type) {
     _validateSchedForm()
 }
 
+function selectSchedScriptMode(mode) {
+    _schedScriptMode = mode
+    document.getElementById('sched-script-file-row').style.display   = mode === 'file'   ? 'block' : 'none'
+    document.getElementById('sched-script-manual-row').style.display = mode === 'manual' ? 'block' : 'none'
+    const btnFile   = document.getElementById('sched-script-tab-file')
+    const btnManual = document.getElementById('sched-script-tab-manual')
+    btnFile.style.background    = mode === 'file'   ? 'var(--accent)' : 'var(--card2)'
+    btnFile.style.color         = mode === 'file'   ? '#fff'          : 'var(--muted)'
+    btnFile.style.borderColor   = mode === 'file'   ? 'var(--accent)' : 'var(--border)'
+    btnManual.style.background  = mode === 'manual' ? 'var(--accent)' : 'var(--card2)'
+    btnManual.style.color       = mode === 'manual' ? '#fff'          : 'var(--muted)'
+    btnManual.style.borderColor = mode === 'manual' ? 'var(--accent)' : 'var(--border)'
+    _validateSchedForm()
+}
+
 function _validateSchedForm() {
     const hasType  = !!_schedType
     let hasWhen    = false
@@ -4982,7 +5052,9 @@ function _validateSchedForm() {
     }
     const hasCreds  = _schedType === 'wol' ||
         (document.getElementById('inp-sched-user').value.trim() && document.getElementById('inp-sched-pass').value)
-    const hasScript = _schedType !== 'script' || !!document.getElementById('sel-sched-script').value
+    const hasScript = _schedType !== 'script' ||
+        (_schedScriptMode === 'file'   && !!document.getElementById('sel-sched-script').value) ||
+        (_schedScriptMode === 'manual' && !!document.getElementById('inp-sched-scriptblock').value.trim())
     document.getElementById('sched-next-btn').disabled = !(hasType && hasWhen && hasCreds && hasScript)
 }
 
@@ -4990,7 +5062,9 @@ function openSchedRecap() {
     const typeLabels = { script:'Script PowerShell', wol:'Wake-on-LAN', reboot:'Redémarrage', shutdown:'Extinction' }
     const typeIcons  = { script:'📜', wol:'⚡', reboot:'🔄', shutdown:'<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>' }
     const DAY_NAMES  = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
-    const script     = document.getElementById('sel-sched-script').value
+    const script      = _schedScriptMode === 'file' ? document.getElementById('sel-sched-script').value : null
+    const schedBlock  = _schedScriptMode === 'manual' ? document.getElementById('inp-sched-scriptblock').value.trim() : null
+    const scriptLabel = script || (schedBlock ? (schedBlock.length > 40 ? schedBlock.substring(0,40).replace(/\n/g,' ')+'…' : schedBlock.replace(/\n/g,' ')) : '')
 
     let dtText = ''
     if (_schedMode === 'once') {
@@ -5009,7 +5083,7 @@ function openSchedRecap() {
 
     document.getElementById('sched-recap-icon').innerHTML           = typeIcons[_schedType]
     document.getElementById('sched-recap-type').textContent         = typeLabels[_schedType]
-    document.getElementById('sched-recap-script').textContent       = script
+    document.getElementById('sched-recap-script').textContent       = scriptLabel
     document.getElementById('sched-recap-script-row').style.display = _schedType === 'script' ? 'flex' : 'none'
     document.getElementById('sched-recap-targets').innerHTML        = [...basket].map(h => `<span class="sched-target-pill">${escHtml(h)}</span>`).join('')
     document.getElementById('sched-recap-dt').textContent           = dtText
@@ -5020,24 +5094,27 @@ function openSchedRecap() {
 }
 
 async function launchSchedule() {
-    const script   = document.getElementById('sel-sched-script').value
-    const username = document.getElementById('inp-sched-user').value.trim()
-    const password = document.getElementById('inp-sched-pass').value
-    const targets  = [...basket]
-    const btn      = document.getElementById('sched-launch-btn')
+    const script      = _schedScriptMode === 'file'   ? document.getElementById('sel-sched-script').value : null
+    const schedBlock  = _schedScriptMode === 'manual' ? document.getElementById('inp-sched-scriptblock').value.trim() : null
+    const scriptLabel = script || (schedBlock ? (schedBlock.length > 30 ? schedBlock.substring(0,30).replace(/\n/g,' ')+'…' : schedBlock.replace(/\n/g,' ')) : '')
+    const username    = document.getElementById('inp-sched-user').value.trim()
+    const password    = document.getElementById('inp-sched-pass').value
+    const targets     = [...basket]
+    const btn         = document.getElementById('sched-launch-btn')
     btn.disabled   = true; btn.textContent = '⏳ Planification...'
     try {
         const body = { type: _schedType, targets, throttle: parseInt(document.getElementById('inp-throttle').value) || 10 }
-        if (script)   body.script   = script
-        if (username) body.username = username
-        if (password) body.password = password
+        if (script)      body.script      = script
+        if (schedBlock)  body.scriptBlock = schedBlock
+        if (username)    body.username    = username
+        if (password)    body.password    = password
 
         if (_schedMode === 'once') {
             const dt = new Date(document.getElementById('inp-sched-date').value + 'T' + document.getElementById('inp-sched-time').value)
             const typeLabels = { script:'Script PowerShell', wol:'Wake-on-LAN', reboot:'Redémarrage', shutdown:'Extinction' }
             body.at         = dt.toISOString()
             body.recurrence = 'once'
-            body.label      = `${typeLabels[_schedType]}${script ? ' — ' + script : ''} sur ${targets.length} poste(s)`
+            body.label      = `${typeLabels[_schedType]}${scriptLabel ? ' — ' + scriptLabel : ''} sur ${targets.length} poste(s)`
         } else {
             body.recurrence  = _schedRecur
             body.time        = document.getElementById('inp-sched-recur-time').value
@@ -5815,9 +5892,18 @@ function settingsShutdownServer() {
       </div>
       <div id="sched-script-row" style="display:none;margin-bottom:14px;">
         <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">Script</div>
-        <select id="sel-sched-script" onchange="_validateSchedForm()" style="width:100%;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;">
-          <option value="">— Choisir un script —</option>
-        </select>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <button id="sched-script-tab-file"   onclick="selectSchedScriptMode('file')"   style="flex:1;padding:5px 0;border-radius:6px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;font-size:11px;font-weight:600;cursor:pointer;">📂 Fichier</button>
+          <button id="sched-script-tab-manual" onclick="selectSchedScriptMode('manual')" style="flex:1;padding:5px 0;border-radius:6px;border:1.5px solid var(--border);background:var(--card2);color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;">✏️ Manuel</button>
+        </div>
+        <div id="sched-script-file-row">
+          <select id="sel-sched-script" onchange="_validateSchedForm()" style="width:100%;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;">
+            <option value="">— Choisir un script —</option>
+          </select>
+        </div>
+        <div id="sched-script-manual-row" style="display:none;">
+          <textarea id="inp-sched-scriptblock" placeholder="Écris tes commandes PowerShell ici…" oninput="_validateSchedForm()" style="width:100%;box-sizing:border-box;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;padding:8px 10px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;resize:vertical;min-height:80px;"></textarea>
+        </div>
       </div>
       <div id="sched-creds-row" style="display:none;margin-bottom:14px;">
         <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">Identifiants WinRM</div>

@@ -2,7 +2,7 @@ const express = require('express')
 const fs      = require('fs')
 const path    = require('path')
 const { SCRIPTS_DIR }  = require('../lib/constants')
-const { runOneScript } = require('../lib/remote-execution')
+const { runOneScript, runOneScriptBlock } = require('../lib/remote-execution')
 
 const router = express.Router()
 
@@ -15,32 +15,39 @@ router.post('/run-cancel', (req, res) => {
 })
 
 router.post('/run-init', (req, res) => {
-    const { script, targets, username, password, throttle } = req.body
-    if (!script || !targets || !username || !password)
+    const { script, scriptBlock, targets, username, password, throttle } = req.body
+    if (!targets || !username || !password)
         return res.status(400).json({ error: 'Parametres manquants' })
+    if (!script && !scriptBlock)
+        return res.status(400).json({ error: 'Script ou bloc de commandes requis' })
     const token = require('crypto').randomUUID()
-    runSessions.set(token, { script, targets, username, password, throttle: throttle || 10 })
+    runSessions.set(token, { script, scriptBlock, targets, username, password, throttle: throttle || 10 })
     setTimeout(() => runSessions.delete(token), 30000)
     res.json({ token })
 })
 
 router.get('/run', async (req, res) => {
     const token = req.query.token
-    let script, targets, username, password, throttle
+    let script, scriptBlock, targets, username, password, throttle
     if (token) {
         const session = runSessions.get(token)
         if (!session) return res.status(400).json({ error: 'Token invalide ou expiré' })
         runSessions.delete(token)
-        ;({ script, targets, username, password, throttle } = session)
+        ;({ script, scriptBlock, targets, username, password, throttle } = session)
     } else {
-        ;({ script, targets, username, password, throttle = 10 } = req.query)
+        ;({ script, scriptBlock, targets, username, password, throttle = 10 } = req.query)
     }
-    if (!script || !targets || !username || !password)
+    if (!targets || !username || !password)
         return res.status(400).json({ error: 'Parametres manquants' })
+    if (!script && !scriptBlock)
+        return res.status(400).json({ error: 'Script ou bloc de commandes requis' })
 
-    const scriptPath = path.join(SCRIPTS_DIR, script)
-    if (!fs.existsSync(scriptPath))
-        return res.status(404).json({ error: 'Script introuvable' })
+    let scriptPath
+    if (script) {
+        scriptPath = path.join(SCRIPTS_DIR, script)
+        if (!fs.existsSync(scriptPath))
+            return res.status(404).json({ error: 'Script introuvable' })
+    }
 
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
@@ -54,7 +61,7 @@ router.get('/run', async (req, res) => {
     const total    = hostList.length
     let done       = 0, okCount = 0, errCount = 0, index = 0
 
-    send('start', { total, script })
+    send('start', { total, script: script || '(commande inline)' })
 
     if (token) runCancelled.delete(token)
     const isCancelled = () => token ? runCancelled.get(token) === true : false
@@ -64,7 +71,9 @@ router.get('/run', async (req, res) => {
     async function worker() {
         while (index < hostList.length && !authFailed && !isCancelled()) {
             const hostname = hostList[index++]
-            const result = await runOneScript(scriptPath, hostname, hostname, username, password)
+            const result = scriptBlock
+                ? await runOneScriptBlock(scriptBlock, hostname, hostname, username, password)
+                : await runOneScript(scriptPath, hostname, hostname, username, password)
             done++
             if (result.ok) okCount++; else errCount++
             if (result.error && result.error.startsWith('ERR_AUTH')) authFailed = true

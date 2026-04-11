@@ -5,7 +5,7 @@ const crypto       = require('crypto')
 const nodeSchedule = require('node-schedule')
 const { PARC_FILE, SCRIPTS_DIR, KEY_FILE, SCHEDULES_FILE } = require('../lib/constants')
 const { sendWol }      = require('../wol')
-const { runOneScript } = require('../lib/remote-execution')
+const { runOneScript, runOneScriptBlock } = require('../lib/remote-execution')
 
 const router = express.Router()
 
@@ -88,9 +88,13 @@ async function executeScheduledTask(task) {
         while (idx < targets.length) {
             const hostname = targets[idx++]
             if (type === 'script') {
-                const scriptPath = path.join(SCRIPTS_DIR, script)
-                if (fs.existsSync(scriptPath))
-                    await runOneScript(scriptPath, hostname, hostname, username, password).catch(() => {})
+                if (task.scriptBlock) {
+                    await runOneScriptBlock(task.scriptBlock, hostname, hostname, username, password).catch(() => {})
+                } else {
+                    const scriptPath = path.join(SCRIPTS_DIR, script)
+                    if (fs.existsSync(scriptPath))
+                        await runOneScript(scriptPath, hostname, hostname, username, password).catch(() => {})
+                }
             } else {
                 const psCmd = type === 'reboot'
                     ? `Invoke-Command -ComputerName '${hostname}' -Credential $cred -ScriptBlock { Restart-Computer -Force }`
@@ -179,8 +183,8 @@ router.post('/schedule', (req, res) => {
         return res.status(400).json({ error: 'Paramètres manquants' })
     if (['script', 'reboot', 'shutdown'].includes(type) && (!username || !password))
         return res.status(400).json({ error: 'Identifiants requis' })
-    if (type === 'script' && !script)
-        return res.status(400).json({ error: 'Script requis' })
+    if (type === 'script' && !script && !req.body.scriptBlock)
+        return res.status(400).json({ error: 'Script ou bloc de commandes requis' })
 
     const isRecurring = recurrence && recurrence !== 'once'
 
@@ -197,7 +201,7 @@ router.post('/schedule', (req, res) => {
 
         const id   = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
         const task = {
-            id, type, script: script || null, targets,
+            id, type, script: script || null, scriptBlock: req.body.scriptBlock || null, targets,
             username: username || null,
             password: encryptSchedPassword(password || null),
             recurrence, time,
@@ -221,7 +225,7 @@ router.post('/schedule', (req, res) => {
 
     const id   = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     const task = {
-        id, type, script: script || null, targets, at,
+        id, type, script: script || null, scriptBlock: req.body.scriptBlock || null, targets, at,
         username: username || null,
         password: encryptSchedPassword(password || null),
         recurrence: 'once',
