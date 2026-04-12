@@ -2969,7 +2969,7 @@ async function actionGroup(action, g) {
           <div style="min-width:14px;color:${dotColor};font-size:13px;">${data.success ? '✔' : '✖'}</div>
           <div style="flex:1;min-width:0;">
             <div class="run-host-name">${data.hostname}</div>
-            <div class="run-host-status" style="color:${dotColor};">${data.success ? 'Commande envoyée' : escHtml(data.error || 'Erreur')}</div>
+            <div class="run-host-status" style="color:${dotColor};">${data.success ? (action === 'gpupdate' ? 'GPO appliquées' : 'Commande envoyée') : escHtml(data.error || 'Erreur')}</div>
           </div>`
         document.getElementById('ag-results').appendChild(row)
         document.getElementById('ag-results').scrollTop = 999999
