@@ -63,7 +63,7 @@ router.post('/action-bulk-init', (req, res) => {
     const { action, targets, username, password, throttle } = req.body
     if (!action || !targets || !targets.length || !username || !password)
         return res.status(400).json({ error: 'Paramètres manquants' })
-    if (!['off', 'rst'].includes(action))
+    if (!['off', 'rst', 'gpupdate'].includes(action))
         return res.status(400).json({ error: 'Action non supportée' })
     const token = require('crypto').randomUUID()
     actionSessions.set(token, { action, targets, username, password, throttle: parseInt(throttle) || 10 })
@@ -95,6 +95,8 @@ router.get('/action-bulk', async (req, res) => {
 
     const psCmd = action === 'off'
         ? t => `Invoke-Command -ComputerName '${t}' -Credential $cred -ScriptBlock { Stop-Computer -Force }`
+        : action === 'gpupdate'
+        ? t => `Invoke-Command -ComputerName '${t}' -Credential $cred -ScriptBlock { cmd /c "echo N | gpupdate /force" 2>&1 | Out-Null }`
         : t => `Invoke-Command -ComputerName '${t}' -Credential $cred -ScriptBlock { Restart-Computer -Force }`
 
     send('start', { total, action })
@@ -115,7 +117,7 @@ try { ${psCmd(hostname)}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.E
             let stdout = '', stderr = '', settled = false
             const timer = setTimeout(() => {
                 if (!settled) { settled = true; ps.kill(); resolve({ hostname, ok: false, error: 'TIMEOUT' }) }
-            }, 30000)
+            }, action === 'gpupdate' ? 120000 : 30000)
             ps.stdout.on('data', d => stdout += d.toString())
             ps.stderr.on('data', d => stderr += d.toString())
             ps.on('close', () => {

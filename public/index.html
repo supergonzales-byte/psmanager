@@ -284,12 +284,16 @@ header {
 .sunset .pwr-btn.pwr-off { border-color:rgba(251,113,133,.28); background:rgba(251,113,133,.1); }
 .gbtn.gbtn-wol { border-color:#bbf7d0; background:var(--green-l); color:var(--green); }
 .gbtn.gbtn-wol:hover { background:var(--green); border-color:var(--green); color:#fff; }
+.gbtn.gbtn-gpu { border-color:#bfdbfe; background:rgba(96,165,250,.1); color:#60a5fa; }
+.gbtn.gbtn-gpu:hover { background:#60a5fa; border-color:#60a5fa; color:#fff; }
 .dark .gbtn.gbtn-off, .sunset .gbtn.gbtn-off { border-color:rgba(251,113,133,.3);  background:rgba(251,113,133,.08); }
 .dark .gbtn.gbtn-rst, .sunset .gbtn.gbtn-rst { border-color:rgba(251,191,36,.3);   background:rgba(251,191,36,.08); }
 .dark .gbtn.gbtn-wol, .sunset .gbtn.gbtn-wol { border-color:rgba(94,196,122,.25);  background:rgba(94,196,122,.08); }
+.dark .gbtn.gbtn-gpu, .sunset .gbtn.gbtn-gpu { border-color:rgba(96,165,250,.3);   background:rgba(96,165,250,.08); }
 .sunrise .gbtn.gbtn-off { border-color:rgba(224,92,122,.3);  background:rgba(224,92,122,.08); }
 .sunrise .gbtn.gbtn-rst { border-color:rgba(212,137,106,.3); background:rgba(212,137,106,.08); }
 .sunrise .gbtn.gbtn-wol { border-color:rgba(88,184,160,.3);  background:rgba(88,184,160,.08); }
+.sunrise .gbtn.gbtn-gpu { border-color:rgba(76,130,200,.3);  background:rgba(76,130,200,.08); }
 .group-body { display:none; padding:4px 8px 6px; background:var(--card2); }
 .group-body.open { display:block; }
 
@@ -2748,6 +2752,7 @@ function renderSelector(hosts) {
         <div class="group-actions" onclick="event.stopPropagation()">
           <button class="gbtn" title="Ping le groupe" onclick="pingGroup('${g}')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4"/><path d="M17.7 17.7a8 8 0 0 0 0-11.4"/><path d="M3.5 3.5a14 14 0 0 0 0 17"/><path d="M20.5 20.5a14 14 0 0 0 0-17"/></svg></button>
           <button class="gbtn" title="Sessions utilisateurs" onclick="sessionGroup('${g}')"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
+          <button class="gbtn gbtn-gpu" title="GPUpdate /force" onclick="actionGroup('gpupdate','${g}')"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></button>
           <button class="gbtn gbtn-wol" title="Wake-on-LAN groupe" onclick="wolGroup('${g}')"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></button>
           <button class="gbtn gbtn-rst" title="Redémarrer le groupe" onclick="actionGroup('rst','${g}')"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
           <button class="gbtn gbtn-off" title="Éteindre le groupe" onclick="actionGroup('off','${g}')"><svg viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>
@@ -2903,11 +2908,15 @@ async function actionGroup(action, g) {
   const password = document.getElementById('inp-pass').value
   if (!username || !password) return showAlert('Identifiants WinRM requis.')
   const hosts = getGroupHosts(g)
-  const label = action === 'off' ? 'Éteindre' : 'Redémarrer'
-  const svgIcon = action === 'off' ? `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>` : `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`
+  const label = action === 'off' ? 'Éteindre' : action === 'gpupdate' ? 'GPUpdate /force' : 'Redémarrer'
+  const svgIcon = action === 'off'
+    ? `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>`
+    : action === 'gpupdate'
+    ? `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`
   const throttle = parseInt(document.getElementById('inp-throttle').value) || 10
   showConfirm(svgIcon, `<strong>${label}</strong> les <strong>${hosts.length} poste(s)</strong> du groupe <strong>${g}</strong> ?`, async () => {
-    document.getElementById('ag-modal-title').innerHTML        = action === 'off' ? '<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em;margin-right:6px" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>Extinction en cours...' : '↺ Redémarrage en cours...'
+    document.getElementById('ag-modal-title').innerHTML        = action === 'off' ? '<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.15em;margin-right:6px" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>Extinction en cours...' : action === 'gpupdate' ? '🛡️ GPUpdate en cours...' : '↺ Redémarrage en cours...'
     document.getElementById('ag-total').textContent            = hosts.length
     document.getElementById('ag-ok').textContent               = '0'
     document.getElementById('ag-err').textContent              = '0'
