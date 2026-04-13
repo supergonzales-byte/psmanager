@@ -225,6 +225,22 @@ public class PsmVeyonSSL : ICertificatePolicy {
                 if (\$LASTEXITCODE -ne 0) { throw "Echec import postes (code \$LASTEXITCODE)" }
             }
 
+            # Redemarrage du service Veyon pour acces master immediat
+            try {
+                \$vSvc = Get-Service -Name 'VeyonService' -ErrorAction SilentlyContinue
+                if (\$vSvc) {
+                    if (\$vSvc.Status -eq 'Running') {
+                        Restart-Service -Name 'VeyonService' -Force -ErrorAction Stop
+                    } else {
+                        Start-Service -Name 'VeyonService' -ErrorAction Stop
+                    }
+                    \$waited = 0
+                    while ((Get-Service -Name 'VeyonService').Status -ne 'Running' -and \$waited -lt 15) {
+                        Start-Sleep -Seconds 1; \$waited++
+                    }
+                }
+            } catch {}
+
             "EXIT:0"
         } catch {
             "ERR_EXEC: \$(\$_.Exception.Message.Split(\"\`n\")[0])"
