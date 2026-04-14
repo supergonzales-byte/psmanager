@@ -4594,7 +4594,7 @@ function renderThemePicker(activeKey) {
   const picker = document.getElementById('theme-picker')
   if (!picker) return
   picker.innerHTML = THEMES.map(t => `
-    <div class="theme-opt${t.key === activeKey ? ' active' : ''}" onclick="applyTheme('${t.key}');closeThemePicker()">
+    <div class="theme-opt${t.key === activeKey ? ' active' : ''}" onclick="applyTheme('${t.key}');event.stopPropagation()">
       <span class="theme-opt-swatch" style="background:${t.color}"></span>
       ${t.label}
     </div>`).join('')
