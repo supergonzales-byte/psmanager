@@ -219,7 +219,8 @@ router.get('/scan', async (req, res) => {
     if (_scanCancelled) return res.end()
 
     if (doLldp === 'true') {
-        await runLldpPhase(found, username, password, send, isCancelled)
+        const lldpTargets = excludeKnown === 'true' ? toInventory : found
+        await runLldpPhase(lldpTargets, username, password, send, isCancelled)
     }
 
     send('done', { ok, err, message: `Termine — OK:${ok}  ERR:${err}` })
