@@ -4,6 +4,7 @@ const path    = require('path')
 const crypto  = require('crypto')
 const multer  = require('multer')
 const os      = require('os')
+const https   = require('https')
 const { VEYON_DIR }                        = require('../lib/constants')
 const { resolveServerOrigin }              = require('../lib/config')
 const { checkPort5985 }                    = require('../scan')
@@ -305,6 +306,60 @@ public class PsmVeyonSSL : ICertificatePolicy {
     veyonCancelled.delete(token)
     send('done', { ok: okCount, err: errCount, total })
     res.end()
+})
+
+// Télécharge le dernier installeur Veyon win64 depuis GitHub
+router.post('/veyon-update-installer', async (req, res) => {
+    try {
+        // 1. Récupérer les infos du dernier release GitHub
+        const release = await new Promise((resolve, reject) => {
+            const opts = {
+                hostname: 'api.github.com',
+                path: '/repos/veyon/veyon/releases/latest',
+                headers: { 'User-Agent': 'psmanager-node', 'Accept': 'application/vnd.github.v3+json' }
+            }
+            https.get(opts, r => {
+                let data = ''
+                r.on('data', d => data += d)
+                r.on('end', () => {
+                    try { resolve(JSON.parse(data)) }
+                    catch(e) { reject(new Error('Réponse GitHub invalide')) }
+                })
+            }).on('error', reject)
+        })
+
+        const asset = (release.assets || []).find(a => /^veyon-.*-win64-setup\.exe$/i.test(a.name))
+        if (!asset) return res.status(404).json({ error: 'Aucun installeur win64 trouvé dans le dernier release' })
+
+        // 2. Supprimer l'ancien installeur si présent
+        if (!fs.existsSync(VEYON_DIR)) fs.mkdirSync(VEYON_DIR, { recursive: true })
+        const existing = fs.readdirSync(VEYON_DIR).find(f => /^veyon-.*-win64-setup\.exe$/i.test(f))
+        if (existing) {
+            try { fs.unlinkSync(path.join(VEYON_DIR, existing)) } catch {}
+        }
+
+        // 3. Télécharger le nouvel installeur (avec suivi des redirects)
+        const destPath = path.join(VEYON_DIR, asset.name)
+        await new Promise((resolve, reject) => {
+            function download(url, redirects) {
+                if (redirects > 5) return reject(new Error('Trop de redirections'))
+                const urlObj = new URL(url)
+                https.get({ hostname: urlObj.hostname, path: urlObj.pathname + urlObj.search, headers: { 'User-Agent': 'psmanager-node' } }, r => {
+                    if (r.statusCode === 302 || r.statusCode === 301) {
+                        return download(r.headers.location, redirects + 1)
+                    }
+                    if (r.statusCode !== 200) return reject(new Error(`HTTP ${r.statusCode}`))
+                    const out = fs.createWriteStream(destPath)
+                    r.pipe(out)
+                    out.on('finish', resolve)
+                    out.on('error', reject)
+                }).on('error', reject)
+            }
+            download(asset.browser_download_url, 0)
+        })
+
+        res.json({ ok: true, filename: asset.name, version: release.tag_name })
+    } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
 router.downloadTokens = downloadTokens

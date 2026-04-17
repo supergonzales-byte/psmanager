@@ -71,13 +71,8 @@ router.post('/admin/restart', (req, res) => {
     const newPort = cfg.httpsEnabled ? HTTPS_PORT : PORT
     const host    = req.hostname === '::1' ? 'localhost' : req.hostname
     res.json({ ok: true, newUrl: `${proto}://${host}:${newPort}` })
-    setTimeout(() => {
-        const { spawn } = require('child_process')
-        spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-            detached: true, stdio: 'ignore', cwd: path.join(__dirname, '..')
-        }).unref()
-        process.exit(0)
-    }, 300)
+    // WinSW redémarre automatiquement — pas besoin de spawner manuellement
+    setTimeout(() => process.exit(0), 300)
 })
 
 // ── Configuration HTTPS ──
