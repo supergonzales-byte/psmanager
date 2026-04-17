@@ -34,7 +34,7 @@ async function copyFileToHosts({ filePath, fileName, relPath, destination, targe
 
 function copyOneFile({ hostname, filePath, fileName, relPath, destination, username, password }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, hostname, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -106,7 +106,7 @@ try {
  */
 function collectDrivers({ hostname, modele, username, password, driversBase, onProgress }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, hostname, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw  = password.replace(/'/g, "''")
@@ -237,7 +237,7 @@ async function deployDrivers({ modelePath, targets, username, password, concurre
 
 function deployOneHost({ hostname, allFiles, modelePath, destOnHost, username, password, onFileProgress }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, hostname, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw  = password.replace(/'/g, "''")
@@ -379,7 +379,7 @@ try {
  */
 function listDirectory({ hostname, username, password, remotePath }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -447,7 +447,7 @@ try {
  */
 function downloadFile({ hostname, username, password, remotePath }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -503,7 +503,7 @@ try {
  */
 function deleteRemote({ hostname, username, password, remotePath, isDir }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -556,7 +556,7 @@ try {
  */
 function mkdirRemote({ hostname, username, password, remotePath }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -607,7 +607,7 @@ try {
  */
 function uploadToRemote({ hostname, username, password, localPath, remotePath, fileName }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -670,7 +670,7 @@ try {
  */
 function downloadDirectory({ hostname, username, password, remotePath }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+        const alive = await checkPort5985(hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const dirName   = path.basename(remotePath)
