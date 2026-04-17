@@ -129,11 +129,11 @@ router.post('/ping-batch', async (req, res) => {
         while (index < hosts.length) {
             const i      = index++
             const target = hosts[i].ip || hosts[i].hostname
-            const alive  = await checkPort5985(target, 1000).catch(() => false)
+            const alive  = await checkPort5985(target, 500).catch(() => false)
             send({ hostname: hosts[i].hostname, alive })
         }
     }
-    const workers = Array.from({ length: Math.min(50, hosts.length) }, worker)
+    const workers = Array.from({ length: Math.min(100, hosts.length) }, worker)
     await Promise.all(workers)
     send({ done: true })
     res.end()

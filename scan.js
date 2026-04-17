@@ -55,7 +55,7 @@ function getNetworkRange(ip, prefix) {
  * Vérifie si le port 5985 est ouvert sur un hôte
  * Envoie une requête HTTP basique et attend une vraie réponse WinRM
  */
-function checkPort5985(host, timeout = 1000) {
+function checkPort5985(host, timeout = 500) {
     return new Promise(resolve => {
         const sock = new net.Socket()
         let resolved = false

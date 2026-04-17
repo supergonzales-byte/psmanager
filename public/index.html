@@ -2434,67 +2434,12 @@ async function openLldp(hostname, ip) {
 }
 
 // ══ PING GLOBAL ══
-async function pingAll() {
-  if (!allHosts.length) return
-  const btn = document.getElementById('btn-ping-all')
-  btn.disabled = true
-  btn.innerHTML = '⏳ Ping...'
-
-  // Mettre toutes les pastilles en orange
-  allHosts.forEach(h => {
-    const dot = document.getElementById(`dot-${h.hostname}`)
-    if (dot) dot.style.background = 'var(--muted)'
-  })
-  const elO = document.getElementById('hdr-online')
-  if (elO) elO.textContent = `0 / ${allHosts.length}`
-
-  const hostnames = allHosts.map(h => h.hostname)
-  const batchSize = 50
-
-  // Phase 1 — résolution DNS batch + mise à jour IPs + écriture unique parc.txt
-  try {
-    const res  = await fetch('/api/resolve-batch', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ hostnames })
-    })
-    const data = await res.json()
-    for (const { hostname, ok, ip } of data.results) {
-      if (!ok) continue
-      const host = allHosts.find(h => h.hostname === hostname)
-      if (host && host.ip !== ip) {
-        host.ip = ip
-        const row = document.getElementById(`row-${hostname}`)
-        if (row) {
-          const meta = row.querySelector('.host-meta')
-          if (meta) { const p = meta.textContent.split(' — '); p[0] = ip; meta.textContent = p.join(' — ') }
-        }
-      }
-    }
-  } catch(e) { console.error('resolve-batch:', e) }
-
-  await pingAllStatus()
-}
-
-// ── Ping status uniquement (port 5985) — sans résolution DNS
-async function pingAllStatus() {
-  if (!allHosts.length) return
-  const btn = document.getElementById('btn-ping-all')
-  btn.disabled = true
-  btn.innerHTML = '⏳ Ping...'
-
-  // Mettre toutes les pastilles en gris
-  allHosts.forEach(h => {
-    const dot = document.getElementById(`dot-${h.hostname}`)
-    if (dot) dot.style.background = 'var(--muted)'
-  })
-  const elO = document.getElementById('hdr-online')
-  if (elO) elO.textContent = `0 / ${allHosts.length}`
-
-  // Ping batch SSE, pastilles et compteur mis à jour en temps réel
-  await new Promise((resolve, reject) => {
+// Exécute un batch de ping SSE. hosts = [{hostname, ip}, ...]
+function runPingBatch(hosts) {
+  return new Promise((resolve, reject) => {
     fetch('/api/ping-batch', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ hosts: allHosts.map(h => ({ hostname: h.hostname, ip: h.ip })) })
+      body: JSON.stringify({ hosts })
     }).then(res => {
       const reader  = res.body.getReader()
       const decoder = new TextDecoder()
@@ -2523,10 +2468,80 @@ async function pingAllStatus() {
       read()
     }).catch(reject)
   }).catch(e => console.error('ping-batch:', e))
+}
+
+async function pingAll() {
+  if (!allHosts.length) return
+  const btn = document.getElementById('btn-ping-all')
+  btn.disabled = true
+  btn.innerHTML = '⏳ Ping...'
+
+  // Reset pastilles
+  allHosts.forEach(h => {
+    const dot = document.getElementById(`dot-${h.hostname}`)
+    if (dot) dot.style.background = 'var(--muted)'
+  })
+  const elO = document.getElementById('hdr-online')
+  if (elO) elO.textContent = `0 / ${allHosts.length}`
+
+  const hostnames = allHosts.map(h => h.hostname)
+
+  // DNS lancé en parallèle du ping — renvoie la liste des hosts dont l'IP a changé
+  const dnsPromise = fetch('/api/resolve-batch', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ hostnames })
+  }).then(r => r.json()).then(data => {
+    const changed = []
+    for (const { hostname, ok, ip } of data.results) {
+      if (!ok) continue
+      const host = allHosts.find(h => h.hostname === hostname)
+      if (host && host.ip !== ip) {
+        host.ip = ip
+        const row = document.getElementById(`row-${hostname}`)
+        if (row) {
+          const meta = row.querySelector('.host-meta')
+          if (meta) { const p = meta.textContent.split(' — '); p[0] = ip; meta.textContent = p.join(' — ') }
+        }
+        changed.push({ hostname, ip })
+      }
+    }
+    return changed
+  }).catch(e => { console.error('resolve-batch:', e); return [] })
+
+  // Ping immédiat avec les IPs actuelles — n'attend pas le DNS
+  await runPingBatch(allHosts.map(h => ({ hostname: h.hostname, ip: h.ip })))
+
+  // Attendre la fin du DNS et re-pinger ciblément les hosts dont l'IP a changé
+  const changedHosts = await dnsPromise
+  if (changedHosts.length) {
+    btn.innerHTML = `⏳ Re-ping ${changedHosts.length}...`
+    await runPingBatch(changedHosts)
+  }
 
   updateBasket()
   updateOnlineCount()
+  btn.disabled = false
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4"/><path d="M17.7 17.7a8 8 0 0 0 0-11.4"/><path d="M3.5 3.5a14 14 0 0 0 0 17"/><path d="M20.5 20.5a14 14 0 0 0 0-17"/></svg> Ping tous'
+}
 
+// ── Ping status uniquement (port 5985) — sans résolution DNS, pour refresh manuel
+async function pingAllStatus() {
+  if (!allHosts.length) return
+  const btn = document.getElementById('btn-ping-all')
+  btn.disabled = true
+  btn.innerHTML = '⏳ Ping...'
+
+  allHosts.forEach(h => {
+    const dot = document.getElementById(`dot-${h.hostname}`)
+    if (dot) dot.style.background = 'var(--muted)'
+  })
+  const elO = document.getElementById('hdr-online')
+  if (elO) elO.textContent = `0 / ${allHosts.length}`
+
+  await runPingBatch(allHosts.map(h => ({ hostname: h.hostname, ip: h.ip })))
+
+  updateBasket()
+  updateOnlineCount()
   btn.disabled = false
   btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4"/><path d="M17.7 17.7a8 8 0 0 0 0-11.4"/><path d="M3.5 3.5a14 14 0 0 0 0 17"/><path d="M20.5 20.5a14 14 0 0 0 0-17"/></svg> Ping tous'
 }
@@ -2810,14 +2825,17 @@ async function _saveInstallerArgs(name, args) {
 
 function closeInstallModal() {
   if (installRunning) {
-    showConfirm('⚠️', 'Un déploiement est en cours. Voulez-vous l\'annuler ?', () => {
+    showConfirm(
+      `<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="var(--red)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+      `<strong style="font-size:15px;display:block;margin-bottom:8px;">Annuler le déploiement ?</strong><span style="font-size:12px;color:var(--muted);line-height:1.6;">L'opération en cours sera interrompue<br>sur tous les postes en attente.</span>`,
+      () => {
       if (installToken && installCancelPath)
         fetch(`${installCancelPath}?token=${installToken}`, {method:'POST'}).catch(()=>{})
       if (installEs) { installEs.close(); installEs = null }
       installToken = null
       installRunning = false
       setModalClosable('install-modal', true)
-      document.getElementById('inst-modal-close').disabled = false
+      document.getElementById('inst-modal-close').textContent = 'Fermer'
       document.getElementById('install-modal').style.display = 'none'
     }, true)
     return
@@ -2847,7 +2865,7 @@ async function runInstallBasket(selected, username, password) {
   document.getElementById('inst-prog-fill').style.width = '0%'
   document.getElementById('inst-prog-pct').textContent  = '0%'
   document.getElementById('inst-prog-text').textContent = `0 / ${targets.length}`
-  document.getElementById('inst-modal-close').disabled  = true
+  document.getElementById('inst-modal-close').textContent = '✕ Annuler'
   document.getElementById('install-modal').style.display = 'flex'
 
   installRunning = true
@@ -2870,7 +2888,7 @@ async function runInstallBasket(selected, username, password) {
   } catch(e) {
     document.getElementById('inst-status').textContent = `Erreur : ${e.message}`
     document.getElementById('inst-status').style.color = 'var(--red)'
-    document.getElementById('inst-modal-close').disabled = false
+    document.getElementById('inst-modal-close').textContent = 'Fermer'
     setModalClosable('install-modal', true)
     installRunning = false
     return
@@ -2914,7 +2932,7 @@ async function runInstallBasket(selected, username, password) {
       document.getElementById('inst-status').textContent = `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
       document.getElementById('inst-status').style.color = color
       document.getElementById('inst-prog-fill').style.background = color
-      document.getElementById('inst-modal-close').disabled = false
+      document.getElementById('inst-modal-close').textContent = 'Fermer'
       setModalClosable('install-modal', true)
       es.close()
       installEs = null; installToken = null
@@ -2925,7 +2943,7 @@ async function runInstallBasket(selected, username, password) {
   es.onerror = () => {
     document.getElementById('inst-status').textContent = 'Erreur de connexion SSE'
     document.getElementById('inst-status').style.color = 'var(--red)'
-    document.getElementById('inst-modal-close').disabled = false
+    document.getElementById('inst-modal-close').textContent = 'Fermer'
     setModalClosable('install-modal', true)
     es.close()
     installEs = null; installToken = null
@@ -2953,7 +2971,7 @@ async function runVeyonDeploy(selected, username, password) {
   document.getElementById('inst-prog-fill').style.width = '0%'
   document.getElementById('inst-prog-pct').textContent  = '0%'
   document.getElementById('inst-prog-text').textContent = `0 / ${targets.length}`
-  document.getElementById('inst-modal-close').disabled  = true
+  document.getElementById('inst-modal-close').textContent = '✕ Annuler'
   document.getElementById('install-modal').style.display = 'flex'
   installRunning = true
   setModalClosable('install-modal', false)
@@ -2970,7 +2988,7 @@ async function runVeyonDeploy(selected, username, password) {
   } catch(e) {
     document.getElementById('inst-status').textContent = `Erreur : ${e.message}`
     document.getElementById('inst-status').style.color = 'var(--red)'
-    document.getElementById('inst-modal-close').disabled = false
+    document.getElementById('inst-modal-close').textContent = 'Fermer'
     setModalClosable('install-modal', true)
     installRunning = false
     return
@@ -3014,7 +3032,7 @@ async function runVeyonDeploy(selected, username, password) {
       document.getElementById('inst-status').textContent = `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
       document.getElementById('inst-status').style.color = color
       document.getElementById('inst-prog-fill').style.background = color
-      document.getElementById('inst-modal-close').disabled = false
+      document.getElementById('inst-modal-close').textContent = 'Fermer'
       setModalClosable('install-modal', true)
       es.close()
       installEs = null; installToken = null
@@ -3025,7 +3043,7 @@ async function runVeyonDeploy(selected, username, password) {
   es.onerror = () => {
     document.getElementById('inst-status').textContent = 'Erreur de connexion SSE'
     document.getElementById('inst-status').style.color = 'var(--red)'
-    document.getElementById('inst-modal-close').disabled = false
+    document.getElementById('inst-modal-close').textContent = 'Fermer'
     setModalClosable('install-modal', true)
     es.close()
     installEs = null; installToken = null
@@ -3670,7 +3688,10 @@ function closeActionModal() {
 }
 function dismissActionModal() {
     if (actionRunning) {
-        showConfirm('⚠️', 'Une action est en cours. Voulez-vous l\'annuler ?', () => {
+        showConfirm(
+          `<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="var(--red)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+          `<strong style="font-size:15px;display:block;margin-bottom:8px;">Annuler l'action ?</strong><span style="font-size:12px;color:var(--muted);line-height:1.6;">L'opération en cours sera interrompue.</span>`,
+          () => {
             if (_actionAbortCtrl) {
                 fetch('/api/drivers-cancel', {method:'POST'}).catch(()=>{})
                 _actionAbortCtrl.abort()
