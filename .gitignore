@@ -1,4 +1,5 @@
 node_modules/
+.claude/
 schedules.json
 users.json
 config.json
