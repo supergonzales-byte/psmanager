@@ -1610,6 +1610,8 @@ header {
   <div class="pane-center">
     <div class="toolbar">
       <input id="inp-search" type="text" placeholder="Rechercher un poste..." oninput="filterHosts()">
+      <button class="tb-btn" id="btn-filter-online"  onclick="toggleStatusFilter('online')" title="Afficher uniquement les postes allumés">🟢 Allumés</button>
+      <button class="tb-btn" id="btn-filter-offline" onclick="toggleStatusFilter('offline')" title="Afficher uniquement les postes éteints">🔴 Éteints</button>
       <button class="tb-btn" onclick="selectAll()">Tout sélect.</button>
       <button class="tb-btn" onclick="deselectAll()">Tout désélect.</button>
       <button class="tb-btn" id="btn-scan" onclick="openScan()">📡 Scanner</button>
@@ -2561,6 +2563,12 @@ async function loadParc() {
   try {
     const res = await fetch('/api/parc')
     allHosts  = await res.json()
+    // Réinitialiser les filtres au rechargement du parc
+    statusFilter = null
+    document.getElementById('inp-search').value = ''
+    document.getElementById('btn-filter-online').classList.remove('active')
+    document.getElementById('btn-filter-offline').classList.remove('active')
+    filteredHosts = []
     document.getElementById('hdr-count').textContent = allHosts.length
     document.getElementById('sb-parc').textContent   = `${allHosts.length} poste(s) chargé(s)`
     renderSelector(allHosts)
@@ -3380,17 +3388,33 @@ function deselectAll() {
   updateBasket()
 }
 
-// ══ Filtre recherche ══
+// ══ Filtre recherche + statut ══
+let statusFilter = null // null | 'online' | 'offline'
+
+function toggleStatusFilter(status) {
+  statusFilter = statusFilter === status ? null : status
+  document.getElementById('btn-filter-online').classList.toggle('active', statusFilter === 'online')
+  document.getElementById('btn-filter-offline').classList.toggle('active', statusFilter === 'offline')
+  filterHosts()
+}
+
 function filterHosts() {
-  const q = document.getElementById('inp-search').value.toLowerCase()
-  filteredHosts = q
-    ? allHosts.filter(h =>
-        h.hostname.toLowerCase().includes(q) ||
-        h.ip.includes(q) ||
-        h.modele.toLowerCase().includes(q)
-      )
-    : []
-  renderSelector(filteredHosts.length ? filteredHosts : allHosts)
+  const q = document.getElementById('inp-search').value.toLowerCase().trim()
+  const hasFilter = q !== '' || statusFilter !== null
+
+  let results = allHosts
+  if (q) {
+    results = results.filter(h =>
+      h.hostname.toLowerCase().includes(q) ||
+      h.ip.includes(q) ||
+      (h.modele || '').toLowerCase().includes(q)
+    )
+  }
+  if (statusFilter === 'online')  results = results.filter(h => hostStatus[h.hostname] === true)
+  if (statusFilter === 'offline') results = results.filter(h => hostStatus[h.hostname] === false)
+
+  filteredHosts = hasFilter ? results : []
+  renderSelector(hasFilter ? results : allHosts)
 }
 
 // ══ Panier ══
