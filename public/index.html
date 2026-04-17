@@ -2295,13 +2295,38 @@ async function openReport() {
   document.getElementById('report-modal').style.display = 'flex'
 }
 
+function generateVeyonMaster() {
+  if (!allHosts.length) return showNotif('⚠️', 'Aucun poste chargé.')
+  const lines = allHosts
+    .map(h => {
+      const parts = h.hostname.split('-')
+      const group = parts.length >= 3 ? parts[1] : 'INCONNU'
+      return `${group};${h.hostname};${h.mac}`
+    })
+    .sort()
+    .join('\r\n')
+
+  const blob = new Blob([lines], { type: 'text/csv;charset=utf-8' })
+  const a    = document.createElement('a')
+  a.href     = URL.createObjectURL(blob)
+  a.download = `veyon_master_${new Date().toISOString().slice(0,10)}.csv`
+  a.click()
+  URL.revokeObjectURL(a.href)
+
+  const s = document.getElementById('report-status')
+  s.textContent = `✔ Fichier téléchargé — ${allHosts.length} poste(s)`
+  s.style.color = 'var(--green)'
+}
+
 async function generateReport() {
+  const fmt = document.querySelector('input[name="report-fmt"]:checked')?.value || 'html'
+  const s   = document.getElementById('report-status')
+
+  if (fmt === 'veyon') { generateVeyonMaster(); return }
+
   const cols = [...document.querySelectorAll('#report-col-grid input:checked')]
     .map(cb => cb.value)
   if (!cols.length) return showNotif('⚠️', 'Sélectionnez au moins une colonne.')
-
-  const fmt = document.querySelector('input[name="report-fmt"]:checked')?.value || 'html'
-  const s = document.getElementById('report-status')
   s.textContent = 'Génération en cours...'
   s.style.color = 'var(--orange)'
 
@@ -6027,6 +6052,9 @@ function settingsShutdownServer() {
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
           <input type="radio" name="report-fmt" value="csv"> CSV (Excel)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          <input type="radio" name="report-fmt" value="veyon"> 🖥️ Veyon Master
         </label>
       </div>
       <div id="report-status" style="font-family:var(--sans);font-size:12px;margin-top:12px;"></div>
