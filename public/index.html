@@ -1550,7 +1550,7 @@ header {
       <div id="panel-deploy-veyon" style="display:none;"></div>
 
       <button class="btn btn-outline" id="btn-run-action" onclick="runSelectedAction()"
-        style="margin-top:8px;width:100%;display:none;">▶ Exécuter</button>
+        style="margin-top:8px;width:100%;display:none;">▶ Préparer</button>
     </div>
 
     <!-- Planification -->
@@ -6756,7 +6756,8 @@ document.addEventListener('mouseout', e => {
       <div id="veyon-upload-status" style="margin-top:8px;font-size:12px;min-height:18px;text-align:center;"></div>
     </div>
     <!-- Footer -->
-    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--card2);flex-shrink:0;">
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;background:var(--card2);flex-shrink:0;">
+      <button id="veyon-genkeys-btn" onclick="veyonGenerateKeys()" style="padding:9px 14px;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;margin-right:auto;transition:all .2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">🔑 Générer les clés</button>
       <button onclick="closeVeyonFilesModal()" style="padding:9px 18px;background:var(--surface);border:1.5px solid var(--border);border-radius:8px;color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;">Annuler</button>
       <button id="veyon-deploy-btn" onclick="closeVeyonFilesModal(true)" style="padding:9px 18px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px var(--btn-shadow);transition:all .2s;" disabled>▶ Déployer</button>
     </div>
@@ -6776,6 +6777,7 @@ const VEYON_REQUIRED = [
 let _veyonFiles = []
 let _veyonInstaller = null
 let _veyonPendingDeploy = null   // callback à appeler si on valide depuis la modale
+let _veyonLatestRelease = undefined  // undefined=pas encore chargé, null=erreur, objet=ok
 
 async function refreshVeyonFiles() {
   try {
@@ -6784,6 +6786,58 @@ async function refreshVeyonFiles() {
     _veyonFiles     = data.files || []
     _veyonInstaller = data.installer || null
   } catch { _veyonFiles = []; _veyonInstaller = null }
+}
+
+async function fetchVeyonLatestRelease() {
+  _veyonLatestRelease = undefined
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 10000)
+    const r = await fetch('https://api.github.com/repos/veyon/veyon/releases/latest', {
+      signal: ctrl.signal,
+      headers: { 'Accept': 'application/vnd.github.v3+json' }
+    })
+    clearTimeout(timer)
+    const data = await r.json()
+    const asset = (data.assets || []).find(a => /^veyon-.*-win64-setup\.exe$/i.test(a.name))
+    _veyonLatestRelease = {
+      version:     (data.tag_name || '').replace(/^v/i, ''),
+      assetName:   asset?.name || null,
+      downloadUrl: asset?.browser_download_url || null
+    }
+  } catch { _veyonLatestRelease = null }
+  renderVeyonFileRows()
+}
+
+function _extractVeyonVersion(filename) {
+  const m = filename && filename.match(/^veyon-([0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?)-win64-setup\.exe$/i)
+  return m ? m[1] : null
+}
+
+async function veyonUpdateInstaller() {
+  const btn = document.getElementById('veyon-update-btn')
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Téléchargement…' }
+  try {
+    const { downloadUrl, assetName } = _veyonLatestRelease || {}
+    if (!downloadUrl || !assetName) { showAlert('Informations de version manquantes.'); if (btn) { btn.disabled = false; btn.textContent = '⬇ Réessayer' }; return }
+    const r = await fetch('/api/veyon-update-installer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ downloadUrl, assetName })
+    })
+    const data = await r.json()
+    if (data.ok) {
+      await refreshVeyonFiles()
+      _veyonLatestRelease = { ..._veyonLatestRelease, _justUpdated: true }
+      renderVeyonFileRows()
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '⬇ Réessayer' }
+      showAlert('Erreur : ' + (data.error || 'Échec du téléchargement'))
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇ Réessayer' }
+    showAlert('Erreur réseau : ' + e.message)
+  }
 }
 
 function veyonAllPresent() {
@@ -6801,11 +6855,36 @@ function renderVeyonFileRows() {
   container.innerHTML = VEYON_REQUIRED.map(req => {
     const present = req.key === 'installer' ? !!_veyonInstaller : _veyonFiles.includes(req.hint)
     const fname   = req.key === 'installer' ? (_veyonInstaller || req.hint) : req.hint
+
+    let versionBadge = ''
+    if (req.key === 'installer') {
+      const currentVer = _extractVeyonVersion(_veyonInstaller)
+      if (_veyonLatestRelease === undefined) {
+        versionBadge = `<div style="font-size:10px;color:var(--muted);margin-top:4px;">Vérification de la version…</div>`
+      } else if (_veyonLatestRelease === null || _veyonLatestRelease.error) {
+        versionBadge = `<div style="font-size:10px;color:var(--muted);margin-top:4px;">Impossible de vérifier la version GitHub</div>`
+      } else {
+        const latestVer = _veyonLatestRelease.version
+        const upToDate  = currentVer && latestVer && currentVer === latestVer
+        if (upToDate) {
+          versionBadge = `<div style="font-size:10px;color:var(--green);margin-top:4px;">✓ À jour (${latestVer})</div>`
+        } else {
+          const label  = present ? 'Mise à jour disponible' : 'Disponible'
+          const btnTxt = present ? '⬇ Mettre à jour' : '⬇ Télécharger'
+          versionBadge = `<div style="display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap;">
+            <span style="font-size:10px;color:var(--accent);font-weight:600;">${label} : ${latestVer}</span>
+            <button id="veyon-update-btn" onclick="veyonUpdateInstaller()" style="font-size:10px;padding:2px 8px;border-radius:5px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-weight:700;cursor:pointer;font-family:var(--sans);">${btnTxt}</button>
+          </div>`
+        }
+      }
+    }
+
     return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1.5px solid ${present ? 'var(--accent-border)' : 'rgba(198,40,40,.25)'};background:${present ? 'var(--accent-l2)' : 'rgba(198,40,40,.04)'};">
       <span style="font-size:16px;flex-shrink:0;">${present ? '✅' : '❌'}</span>
       <div style="flex:1;min-width:0;">
         <div style="font-size:12px;font-weight:600;color:var(--text);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fname}</div>
         <div style="font-size:10px;color:var(--muted);margin-top:1px;">${req.label}</div>
+        ${versionBadge}
       </div>
       <span style="font-size:11px;font-weight:700;color:${present ? 'var(--green)' : 'var(--red)'};">${present ? 'OK' : 'Manquant'}</span>
     </div>`
@@ -6817,16 +6896,22 @@ function renderVeyonFileRows() {
     btn.style.opacity = veyonAllPresent() ? '1' : '.4'
     btn.style.cursor  = veyonAllPresent() ? 'pointer' : 'not-allowed'
   }
+
+  const keysPresent = _veyonFiles.includes('key') && _veyonFiles.includes('publickey')
+  const genBtn = document.getElementById('veyon-genkeys-btn')
+  if (genBtn) genBtn.style.display = keysPresent ? 'none' : ''
 }
 
 async function openVeyonFilesModal(pendingDeploy) {
   _veyonPendingDeploy = pendingDeploy || null
+  _veyonLatestRelease = undefined
   await refreshVeyonFiles()
   renderVeyonFileRows()
   document.getElementById('veyon-upload-status').textContent = ''
   document.getElementById('veyon-upload-input').value = ''
   const modal = document.getElementById('veyon-files-modal')
   modal.style.display = 'flex'
+  fetchVeyonLatestRelease()  // async, met à jour la ligne installeur quand GitHub répond
 }
 
 function closeVeyonFilesModal(deploy) {
@@ -6864,6 +6949,35 @@ async function veyonHandleDrop(fileList) {
     statusEl.textContent = `✖ ${e.message}`
   }
   document.getElementById('veyon-upload-input').value = ''
+}
+
+async function _doVeyonGenerateKeys() {
+  const btn = document.getElementById('veyon-genkeys-btn')
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Génération…' }
+  const statusEl = document.getElementById('veyon-upload-status')
+  statusEl.style.color = 'var(--muted)'
+  statusEl.textContent = 'Génération de la paire de clés…'
+  try {
+    const r    = await fetch('/api/veyon-generate-keys', { method: 'POST' })
+    const data = await r.json()
+    if (data.ok) {
+      statusEl.style.color = 'var(--green)'
+      statusEl.textContent = '✔ Clés générées avec succès'
+      await refreshVeyonFiles()
+      renderVeyonFileRows()
+    } else {
+      statusEl.style.color = 'var(--red)'
+      statusEl.textContent = '✖ Erreur : ' + (data.error || 'Échec')
+    }
+  } catch(e) {
+    statusEl.style.color = 'var(--red)'
+    statusEl.textContent = '✖ ' + e.message
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🔑 Générer les clés' }
+}
+
+function veyonGenerateKeys() {
+  _doVeyonGenerateKeys()
 }
 
 // Fermer la modale en cliquant sur le fond

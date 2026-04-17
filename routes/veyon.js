@@ -308,57 +308,55 @@ public class PsmVeyonSSL : ICertificatePolicy {
     res.end()
 })
 
-// Télécharge le dernier installeur Veyon win64 depuis GitHub
+// Télécharge le dernier installeur Veyon win64 depuis GitHub via PowerShell (proxy système)
 router.post('/veyon-update-installer', async (req, res) => {
     try {
-        // 1. Récupérer les infos du dernier release GitHub
-        const release = await new Promise((resolve, reject) => {
-            const opts = {
-                hostname: 'api.github.com',
-                path: '/repos/veyon/veyon/releases/latest',
-                headers: { 'User-Agent': 'psmanager-node', 'Accept': 'application/vnd.github.v3+json' }
-            }
-            https.get(opts, r => {
-                let data = ''
-                r.on('data', d => data += d)
-                r.on('end', () => {
-                    try { resolve(JSON.parse(data)) }
-                    catch(e) { reject(new Error('Réponse GitHub invalide')) }
-                })
-            }).on('error', reject)
-        })
+        const { downloadUrl, assetName } = req.body || {}
+        if (!downloadUrl || !assetName) return res.status(400).json({ error: 'downloadUrl et assetName requis' })
+        if (!/^https:\/\/github\.com\/veyon\/veyon\/releases\/download\//i.test(downloadUrl))
+            return res.status(400).json({ error: 'URL non autorisée' })
+        if (!/^veyon-.*-win64-setup\.exe$/i.test(assetName))
+            return res.status(400).json({ error: 'Nom de fichier invalide' })
 
-        const asset = (release.assets || []).find(a => /^veyon-.*-win64-setup\.exe$/i.test(a.name))
-        if (!asset) return res.status(404).json({ error: 'Aucun installeur win64 trouvé dans le dernier release' })
-
-        // 2. Supprimer l'ancien installeur si présent
         if (!fs.existsSync(VEYON_DIR)) fs.mkdirSync(VEYON_DIR, { recursive: true })
         const existing = fs.readdirSync(VEYON_DIR).find(f => /^veyon-.*-win64-setup\.exe$/i.test(f))
-        if (existing) {
-            try { fs.unlinkSync(path.join(VEYON_DIR, existing)) } catch {}
-        }
+        if (existing) try { fs.unlinkSync(path.join(VEYON_DIR, existing)) } catch {}
 
-        // 3. Télécharger le nouvel installeur (avec suivi des redirects)
-        const destPath = path.join(VEYON_DIR, asset.name)
+        const destPath = path.join(VEYON_DIR, assetName)
+        const safeUrl  = downloadUrl.replace(/'/g, "''")
+        const safeDest = destPath.replace(/'/g, "''")
+
         await new Promise((resolve, reject) => {
-            function download(url, redirects) {
-                if (redirects > 5) return reject(new Error('Trop de redirections'))
-                const urlObj = new URL(url)
-                https.get({ hostname: urlObj.hostname, path: urlObj.pathname + urlObj.search, headers: { 'User-Agent': 'psmanager-node' } }, r => {
-                    if (r.statusCode === 302 || r.statusCode === 301) {
-                        return download(r.headers.location, redirects + 1)
-                    }
-                    if (r.statusCode !== 200) return reject(new Error(`HTTP ${r.statusCode}`))
-                    const out = fs.createWriteStream(destPath)
-                    r.pipe(out)
-                    out.on('finish', resolve)
-                    out.on('error', reject)
-                }).on('error', reject)
-            }
-            download(asset.browser_download_url, 0)
+            const { spawn } = require('child_process')
+            const ps = spawn('powershell.exe', [
+                '-NoProfile', '-NonInteractive', '-Command',
+                `Invoke-WebRequest -Uri '${safeUrl}' -OutFile '${safeDest}' -UseBasicParsing`
+            ], { windowsHide: true })
+            let stderr = ''
+            ps.stderr.on('data', d => stderr += d.toString())
+            ps.on('close', code => code === 0 ? resolve() : reject(new Error(stderr || `Exit ${code}`)))
+            ps.on('error', reject)
         })
 
-        res.json({ ok: true, filename: asset.name, version: release.tag_name })
+        res.json({ ok: true, filename: assetName })
+    } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
+// Génère la paire de clés key / publickey pour Veyon via le module crypto Node.js
+router.post('/veyon-generate-keys', async (req, res) => {
+    try {
+        if (!fs.existsSync(VEYON_DIR)) fs.mkdirSync(VEYON_DIR, { recursive: true })
+        const { generateKeyPair } = require('crypto')
+        const { privateKey, publicKey } = await new Promise((resolve, reject) =>
+            generateKeyPair('rsa', {
+                modulusLength: 2048,
+                privateKeyEncoding: { type: 'pkcs1', format: 'pem' },
+                publicKeyEncoding:  { type: 'spki',  format: 'pem' }
+            }, (err, pub, priv) => err ? reject(err) : resolve({ privateKey: priv, publicKey: pub }))
+        )
+        fs.writeFileSync(path.join(VEYON_DIR, 'key'),       privateKey)
+        fs.writeFileSync(path.join(VEYON_DIR, 'publickey'), publicKey)
+        res.json({ ok: true })
     } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
