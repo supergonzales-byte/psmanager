@@ -342,6 +342,67 @@ router.post('/veyon-update-installer', async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }) }
 })
 
+// Génère un veyon_configuration.json par défaut si absent
+router.post('/veyon-generate-config', (req, res) => {
+    try {
+        const dest = path.join(VEYON_DIR, 'veyon_configuration.json')
+        if (fs.existsSync(dest)) return res.json({ ok: false, error: 'Fichier déjà présent' })
+        if (!fs.existsSync(VEYON_DIR)) fs.mkdirSync(VEYON_DIR, { recursive: true })
+        const { randomUUID } = require('crypto')
+        const config = {
+            Authentication: { Method: 1 },
+            Core: {
+                ApplicationVersion: 7,
+                InstallationID: randomUUID(),
+                PluginVersions: {
+                    JsonStoreObject: {
+                        "{14bacaaa-ebe5-449c-b881-5b382f952571}": "1.1",
+                        "{1b08265b-348f-4978-acaa-45d4f6b90bd9}": "1.1",
+                        "{1baa01e0-02d6-4494-a766-788f5b225991}": "1.1",
+                        "{2917cdeb-ac13-4099-8715-20368254a367}": "1.1",
+                        "{2ad98ccb-e9a5-43ef-8c4c-876ac5efbcb1}": "1.1",
+                        "{387a0c43-1355-4ff6-9e1f-d098e9ce5127}": "1.1",
+                        "{39d7a07f-94db-4912-aa1a-c4df8aee3879}": "1.1",
+                        "{4122e8ca-b617-4e36-b851-8e050ed2d82e}": "1.2",
+                        "{4790bad8-4c56-40d5-8361-099a68f0c24b}": "1.1",
+                        "{67dfc1c1-8f37-4539-a298-16e74e34fd8b}": "1.1",
+                        "{6f0a491e-c1c6-4338-8244-f823b0bf8670}": "1.2",
+                        "{80580500-2e59-4297-9e35-e53959b028cd}": "1.2",
+                        "{8ae6668b-9c12-4b29-9bfc-ff89f6604164}": "1.1",
+                        "{a54ee018-42bf-4569-90c7-0d8470125ccf}": "2.0",
+                        "{d4bb9c42-9eef-4ecb-8dd5-dfd84b355481}": "1.0",
+                        "{e11bee03-b99c-465c-bf90-7e5339b83f6b}": "1.0",
+                        "{ee322521-f4fb-482d-b082-82a79003afa7}": "1.1",
+                        "{f626f759-7691-45c0-bd4a-37171d98d219}": "1.0"
+                    }
+                }
+            },
+            LDAP: {
+                ComputerLocationAttribute: "",
+                ComputerLocationsByAttribute: "false",
+                ComputerLocationsByContainer: "false",
+                LocationNameAttribute: "",
+                UserLoginNameAttribute: ""
+            },
+            Master: {
+                AllowAddingHiddenLocations: "false",
+                AutoAdjustMonitoringIconSize: "false",
+                AutoOpenComputerSelectPanel: "false",
+                AutoSelectCurrentLocation: "false",
+                ConfirmUnsafeActions: "false",
+                HideComputerFilter: "false",
+                HideEmptyLocations: "false",
+                HideLocalComputer: true,
+                ShowCurrentLocationOnly: "false"
+            },
+            Network: { FirewallExceptionEnabled: "1", VeyonServerPort: 11100 },
+            Windows: { SoftwareSASEnabled: "1" }
+        }
+        fs.writeFileSync(dest, JSON.stringify(config, null, 4))
+        res.json({ ok: true })
+    } catch(e) { res.status(500).json({ error: e.message }) }
+})
+
 // Génère la paire de clés key / publickey pour Veyon via le module crypto Node.js
 router.post('/veyon-generate-keys', async (req, res) => {
     try {

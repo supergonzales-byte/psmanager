@@ -6857,6 +6857,11 @@ function renderVeyonFileRows() {
     const fname   = req.key === 'installer' ? (_veyonInstaller || req.hint) : req.hint
 
     let versionBadge = ''
+    if (req.key === 'cfg' && !present) {
+      versionBadge = `<div style="margin-top:5px;">
+        <button onclick="veyonGenerateConfig()" style="font-size:10px;padding:2px 8px;border-radius:5px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font-weight:700;cursor:pointer;font-family:var(--sans);">⚙ Générer</button>
+      </div>`
+    }
     if (req.key === 'installer') {
       const currentVer = _extractVeyonVersion(_veyonInstaller)
       if (_veyonLatestRelease === undefined) {
@@ -6978,6 +6983,28 @@ async function _doVeyonGenerateKeys() {
 
 function veyonGenerateKeys() {
   _doVeyonGenerateKeys()
+}
+
+async function veyonGenerateConfig() {
+  const statusEl = document.getElementById('veyon-upload-status')
+  statusEl.style.color = 'var(--muted)'
+  statusEl.textContent = 'Génération de veyon_configuration.json…'
+  try {
+    const r    = await fetch('/api/veyon-generate-config', { method: 'POST' })
+    const data = await r.json()
+    if (data.ok) {
+      statusEl.style.color = 'var(--green)'
+      statusEl.textContent = '✔ veyon_configuration.json généré'
+      await refreshVeyonFiles()
+      renderVeyonFileRows()
+    } else {
+      statusEl.style.color = 'var(--red)'
+      statusEl.textContent = '✖ Erreur : ' + (data.error || 'Échec')
+    }
+  } catch(e) {
+    statusEl.style.color = 'var(--red)'
+    statusEl.textContent = '✖ ' + e.message
+  }
 }
 
 // Fermer la modale en cliquant sur le fond
