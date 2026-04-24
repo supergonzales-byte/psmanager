@@ -3702,7 +3702,9 @@ function onActionChange() {
     document.getElementById('panel-install-software').style.display = val === 'install-software' ? 'block' : 'none'
     document.getElementById('panel-deploy-veyon').style.display    = val === 'deploy-veyon'      ? 'block' : 'none'
     document.getElementById('panel-file-explorer') && (document.getElementById('panel-file-explorer').style.display = 'none')
-    document.getElementById('btn-run-action').style.display        = (val && val !== 'copy-files' && val !== 'login-history') ? 'block' : 'none'
+    const _btnRun = document.getElementById('btn-run-action')
+    _btnRun.style.display = (val && val !== 'copy-files' && val !== 'login-history') ? 'block' : 'none'
+    _btnRun.textContent   = (val === 'collect-drivers' || val === 'install-software') ? '▶ Exécuter' : '▶ Préparer'
     if (val === 'deploy-veyon') loadVeyonFilesList()
 }
 
