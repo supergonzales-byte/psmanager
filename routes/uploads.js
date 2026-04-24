@@ -2,7 +2,7 @@ const express = require('express')
 const fs      = require('fs')
 const path    = require('path')
 const { upload }                          = require('../lib/multer')
-const { SCRIPTS_DIR, INSTALLERS_DIR, INSTALLER_ARGS_FILE } = require('../lib/constants')
+const { SCRIPTS_DIR, INSTALLERS_DIR, INSTALLER_ARGS_FILE, INSTALLER_META_FILE } = require('../lib/constants')
 
 const router = express.Router()
 
@@ -59,6 +59,87 @@ router.post('/installer-args', (req, res) => {
         data[name] = args || ''
         fs.writeFileSync(INSTALLER_ARGS_FILE, JSON.stringify(data, null, 2))
         res.json({ ok: true })
+    } catch(e) {
+        res.status(500).json({ ok: false, error: e.message })
+    }
+})
+
+// ── Métadonnées installeurs (choco_id, …) ─────────────────────────────────
+
+router.get('/installer-meta', (req, res) => {
+    try {
+        if (!fs.existsSync(INSTALLER_META_FILE)) return res.json({})
+        res.json(JSON.parse(fs.readFileSync(INSTALLER_META_FILE, 'utf8')))
+    } catch { res.json({}) }
+})
+
+router.post('/installer-meta', (req, res) => {
+    const { name, choco_id } = req.body
+    if (!name) return res.status(400).json({ ok: false, error: 'Nom requis' })
+    try {
+        let data = {}
+        try { data = JSON.parse(fs.readFileSync(INSTALLER_META_FILE, 'utf8')) } catch {}
+        if (choco_id) {
+            data[name] = Object.assign(data[name] || {}, { choco_id })
+        } else {
+            if (data[name]) delete data[name].choco_id
+            if (data[name] && !Object.keys(data[name]).length) delete data[name]
+        }
+        fs.writeFileSync(INSTALLER_META_FILE, JSON.stringify(data, null, 2))
+        res.json({ ok: true })
+    } catch(e) {
+        res.status(500).json({ ok: false, error: e.message })
+    }
+})
+
+// ── Vérification version Chocolatey ──────────────────────────────────────
+
+router.get('/installer-version-check', async (req, res) => {
+    const { id } = req.query
+    if (!id) return res.status(400).json({ ok: false, error: 'id requis' })
+    try {
+        const { getLatestVersion } = require('../lib/chocolatey')
+        const version = await getLatestVersion(id)
+        res.json({ ok: true, version })
+    } catch(e) {
+        res.json({ ok: false, error: e.message })
+    }
+})
+
+// ── Mise à jour automatique depuis Chocolatey ─────────────────────────────
+
+router.post('/installer-update', async (req, res) => {
+    const { filename, choco_id } = req.body
+    if (!filename || !choco_id) return res.status(400).json({ ok: false, error: 'filename et choco_id requis' })
+    try {
+        const { getLatestVersion, downloadInstaller } = require('../lib/chocolatey')
+
+        const version     = await getLatestVersion(choco_id)
+        const newFilename = await downloadInstaller(choco_id, version, INSTALLERS_DIR)
+
+        // Transférer les args sur le nouveau nom de fichier
+        let args = {}
+        try { args = JSON.parse(fs.readFileSync(INSTALLER_ARGS_FILE, 'utf8')) } catch {}
+        if (args[filename] !== undefined) {
+            args[newFilename] = args[filename]
+            if (filename !== newFilename) delete args[filename]
+            fs.writeFileSync(INSTALLER_ARGS_FILE, JSON.stringify(args, null, 2))
+        }
+
+        // Transférer les métadonnées
+        let meta = {}
+        try { meta = JSON.parse(fs.readFileSync(INSTALLER_META_FILE, 'utf8')) } catch {}
+        meta[newFilename] = Object.assign(meta[filename] || {}, { choco_id })
+        if (filename !== newFilename) delete meta[filename]
+        fs.writeFileSync(INSTALLER_META_FILE, JSON.stringify(meta, null, 2))
+
+        // Supprimer l'ancien fichier si le nom a changé
+        if (filename !== newFilename) {
+            const oldPath = path.join(INSTALLERS_DIR, filename)
+            try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath) } catch {}
+        }
+
+        res.json({ ok: true, filename: newFilename, version })
     } catch(e) {
         res.status(500).json({ ok: false, error: e.message })
     }

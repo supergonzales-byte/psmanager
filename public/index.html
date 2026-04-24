@@ -1087,6 +1087,19 @@ header {
 #inst-grid .sgs-card { overflow:hidden; }
 .sgs-args { font-size:10px; font-family:var(--mono); color:var(--accent); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default; }
 .sgs-args-empty { color:var(--muted); font-style:italic; }
+.sgs-choco-row { display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap; }
+.sgs-choco-lbl { font-size:9px; color:var(--muted); flex-shrink:0; }
+.sgs-choco-input { font-size:10px; font-family:var(--mono); color:var(--muted); background:transparent; border:none; border-bottom:1px dashed var(--border2); width:90px; outline:none; padding:0 2px; min-width:0; }
+.sgs-choco-input:focus { color:var(--text); border-bottom-color:var(--accent); }
+.sgs-choco-input::placeholder { color:var(--border2); font-style:italic; }
+.sgs-vbadge { font-size:10px; padding:1px 6px; border-radius:4px; font-weight:600; white-space:nowrap; flex-shrink:0; }
+.sgs-vbadge-ok   { background:rgba(34,197,94,.15); color:#22c55e; }
+.sgs-vbadge-warn { background:rgba(249,115,22,.12); color:var(--orange); }
+.sgs-vbadge-load { color:var(--muted); font-weight:400; }
+.sgs-vbadge-err  { color:var(--border2); font-style:italic; font-size:9px; }
+.sgs-update-btn { font-size:10px; padding:2px 8px; border-radius:4px; border:1px solid var(--orange); color:var(--orange); background:transparent; cursor:pointer; font-weight:600; white-space:nowrap; flex-shrink:0; }
+.sgs-update-btn:hover { background:rgba(249,115,22,.12); }
+.sgs-update-btn:disabled { opacity:.5; cursor:default; }
 #inst-args-tooltip { position:fixed; z-index:9999; display:none; padding:5px 10px; background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:11px; font-family:var(--mono); box-shadow:0 4px 12px rgba(0,0,0,.2); pointer-events:none; white-space:nowrap; }
 .sched-target-pill { display:inline-flex; align-items:center; background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:2px 9px; font-size:11px; color:var(--text); font-family:var(--mono); margin:2px; }
 .sched-task-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border); margin-bottom:6px; background:var(--card2); }
@@ -2739,6 +2752,8 @@ async function uploadScript(input) {
 // ══ INSTALLATION LOGICIEL ══
 
 let _installerArgs     = {}   // { "vlc.exe": "/S", ... } — chargé depuis le serveur
+let _installerMeta     = {}   // { "vlc.exe": { choco_id: "vlc" }, ... }
+let _vbadgeMap         = {}   // filename → { badgeId, updId }
 let _selectedInstaller = null // nom du fichier sélectionné
 let installRunning     = false
 let installEs          = null
@@ -2747,12 +2762,14 @@ let installCancelPath  = null
 
 async function loadInstallers() {
   try {
-    const [listRes, argsRes] = await Promise.all([
+    const [listRes, argsRes, metaRes] = await Promise.all([
       fetch('/api/installers'),
-      fetch('/api/installer-args')
+      fetch('/api/installer-args'),
+      fetch('/api/installer-meta'),
     ])
     const list = await listRes.json()
     _installerArgs = await argsRes.json()
+    _installerMeta = await metaRes.json()
     _buildInstallerGrid(list)
   } catch(e) {
     document.getElementById('inst-empty').textContent = '⚠ Erreur chargement installeurs'
@@ -2770,23 +2787,46 @@ function _buildInstallerGrid(list) {
     return
   }
   empty.style.display = 'none'
+  _vbadgeMap = {}
   const cur = _selectedInstaller
-  grid.innerHTML = list.map(f => {
-    const isMsi  = f.toLowerCase().endsWith('.msi')
-    const ico    = isMsi ? '📋' : '⚙️'
-    const saved  = _installerArgs[f] || ''
+  grid.innerHTML = list.map((f, i) => {
+    const isMsi   = f.toLowerCase().endsWith('.msi')
+    const ico     = isMsi ? '📋' : '⚙️'
+    const saved   = _installerArgs[f] || ''
+    const chocoId = (_installerMeta[f] || {}).choco_id || ''
+    const safeF   = f.replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    const bid     = `vbadge_${i}`
+    const uid     = `vupd_${i}`
+    _vbadgeMap[f] = { badgeId: bid, updId: uid }
     const argHtml = saved
       ? `<div class="sgs-args" data-args="${escHtml(saved)}">${escHtml(saved)}</div>`
       : `<div class="sgs-args sgs-args-empty">aucun argument</div>`
     return `<div class="sgs-card${f === cur ? ' selected' : ''}" data-name="${escHtml(f)}"
-      onclick="pickInstaller('${f.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+      onclick="pickInstaller('${safeF}')">
       <div class="sgs-ico">${ico}</div>
       <div style="flex:1;min-width:0;">
         <div class="sgs-name">${escHtml(f)}</div>
         ${argHtml}
+        <div class="sgs-choco-row" onclick="event.stopPropagation()">
+          <span class="sgs-choco-lbl">🍫</span>
+          <input class="sgs-choco-input" placeholder="ID Chocolatey…"
+            value="${escHtml(chocoId)}"
+            data-file="${escHtml(f)}"
+            onblur="saveChocoId(this.dataset.file, this.value)"
+            onkeydown="if(event.key==='Enter')this.blur()">
+          <span class="sgs-vbadge sgs-vbadge-load" id="${bid}"></span>
+          <button class="sgs-update-btn" id="${uid}" style="display:none"
+            data-choco="${escHtml(chocoId)}"
+            onclick="updateInstaller('${safeF}', this.dataset.choco)">⬆ Màj</button>
+        </div>
       </div>
     </div>`
   }).join('')
+  // Lancer les vérifications de version en arrière-plan
+  list.forEach(f => {
+    const chocoId = (_installerMeta[f] || {}).choco_id
+    if (chocoId) checkInstallerVersion(f, chocoId)
+  })
 }
 
 function openInstallSelectModal() {
@@ -2824,6 +2864,89 @@ function filterInstallModal(q) {
   const empty = document.getElementById('inst-empty')
   empty.style.display = n ? 'none' : 'block'
   if (!n) empty.textContent = 'Aucun installeur trouvé'
+}
+
+async function saveChocoId(filename, chocoId) {
+  chocoId = chocoId.trim()
+  const prev = (_installerMeta[filename] || {}).choco_id || ''
+  if (chocoId === prev) return
+  _installerMeta[filename] = Object.assign(_installerMeta[filename] || {}, { choco_id: chocoId })
+  // Mettre à jour le data-choco du bouton Màj
+  const ids = _vbadgeMap[filename]
+  if (ids) { const btn = document.getElementById(ids.updId); if (btn) btn.dataset.choco = chocoId }
+  try {
+    await fetch('/api/installer-meta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: filename, choco_id: chocoId || null })
+    })
+    if (chocoId) checkInstallerVersion(filename, chocoId)
+    else {
+      const ids = _vbadgeMap[filename]
+      if (ids) {
+        const b = document.getElementById(ids.badgeId); if (b) { b.className = 'sgs-vbadge'; b.textContent = '' }
+        const u = document.getElementById(ids.updId);   if (u) u.style.display = 'none'
+      }
+    }
+  } catch(e) { console.error('saveChocoId:', e) }
+}
+
+async function checkInstallerVersion(filename, chocoId) {
+  const ids = _vbadgeMap[filename]
+  if (!ids) return
+  const badge = document.getElementById(ids.badgeId)
+  const btn   = document.getElementById(ids.updId)
+  if (!badge) return
+  badge.className = 'sgs-vbadge sgs-vbadge-load'
+  badge.textContent = '🔄'
+  if (btn) btn.style.display = 'none'
+  try {
+    const r = await fetch(`/api/installer-version-check?id=${encodeURIComponent(chocoId)}`)
+    const d = await r.json()
+    if (!d.ok) { badge.className = 'sgs-vbadge sgs-vbadge-err'; badge.textContent = '–'; return }
+    const latest     = d.version
+    const localMatch = filename.match(/(\d+(?:\.\d+)+)/)
+    const localVer   = localMatch ? localMatch[1] : null
+    if (localVer && localVer === latest) {
+      badge.className  = 'sgs-vbadge sgs-vbadge-ok'
+      badge.textContent = '✅ ' + latest
+    } else {
+      badge.className  = 'sgs-vbadge sgs-vbadge-warn'
+      badge.textContent = '⚠ ' + latest + ' dispo'
+      if (btn) { btn.dataset.choco = chocoId; btn.style.display = '' }
+    }
+  } catch {
+    badge.className  = 'sgs-vbadge sgs-vbadge-err'
+    badge.textContent = '–'
+  }
+}
+
+async function updateInstaller(filename, chocoId) {
+  const ids = _vbadgeMap[filename]
+  const badge = ids ? document.getElementById(ids.badgeId) : null
+  const btn   = ids ? document.getElementById(ids.updId)   : null
+  if (btn)   { btn.disabled = true }
+  if (badge) { badge.className = 'sgs-vbadge sgs-vbadge-load'; badge.textContent = '⬇ téléchargement…' }
+  try {
+    const r = await fetch('/api/installer-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, choco_id: chocoId })
+    })
+    const d = await r.json()
+    if (!d.ok) {
+      if (badge) { badge.className = 'sgs-vbadge sgs-vbadge-err'; badge.textContent = '⚠ ' + d.error }
+      if (btn)   btn.disabled = false
+      return
+    }
+    const wasSelected = _selectedInstaller === filename
+    await loadInstallers()
+    if (wasSelected) pickInstaller(d.filename)
+    showNotif('✅', `Installeur mis à jour : ${d.filename}`)
+  } catch(e) {
+    if (badge) { badge.className = 'sgs-vbadge sgs-vbadge-err'; badge.textContent = '⚠ Erreur réseau' }
+    if (btn)   btn.disabled = false
+  }
 }
 
 async function uploadInstaller(input) {
