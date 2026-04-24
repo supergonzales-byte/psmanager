@@ -1062,6 +1062,12 @@ header {
 .selmod-header h3 { font-size:14px; font-weight:700; color:var(--text); }
 .selmod-body { padding:14px 18px; overflow-y:auto; flex:1; }
 .selmod-footer { padding:10px 18px 14px; border-top:1px solid var(--border); }
+.selmod-footer-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.selmod-footer-grow { flex:1; min-width:220px; }
+.selmod-inline-form { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.selmod-inline-input { flex:1; min-width:180px; box-sizing:border-box; background:var(--surface); border:1.5px solid var(--border); border-radius:8px; padding:8px 10px; color:var(--text); font-size:12px; font-family:var(--mono); outline:none; }
+.selmod-inline-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--focus-ring); }
+.selmod-inline-hint { font-size:11px; color:var(--muted); margin-top:6px; line-height:1.35; }
 .selmod-search { display:flex; align-items:center; gap:7px; background:var(--card2); border:1.5px solid var(--border); border-radius:8px; padding:6px 10px; margin-bottom:12px; }
 .selmod-search input { border:none; background:transparent; color:var(--text); font-size:13px; outline:none; flex:1; }
 .selmod-search .ico { color:var(--muted); font-size:12px; }
@@ -1087,19 +1093,24 @@ header {
 #inst-grid .sgs-card { overflow:hidden; }
 .sgs-args { font-size:10px; font-family:var(--mono); color:var(--accent); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default; }
 .sgs-args-empty { color:var(--muted); font-style:italic; }
-.sgs-choco-row { display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap; }
-.sgs-choco-lbl { font-size:9px; color:var(--muted); flex-shrink:0; }
-.sgs-choco-input { font-size:10px; font-family:var(--mono); color:var(--muted); background:transparent; border:none; border-bottom:1px dashed var(--border2); width:90px; outline:none; padding:0 2px; min-width:0; }
-.sgs-choco-input:focus { color:var(--text); border-bottom-color:var(--accent); }
+.sgs-choco-box { margin-top:7px; padding:8px 9px; border:1px solid var(--border); border-radius:8px; background:var(--card2); }
+.sgs-choco-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+.sgs-choco-lbl { font-size:11px; font-weight:700; color:var(--text2); flex-shrink:0; }
+.sgs-choco-hint { font-size:10px; color:var(--muted); line-height:1.35; margin-bottom:6px; }
+.sgs-choco-row { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.sgs-choco-input { font-size:12px; font-family:var(--mono); color:var(--text); background:var(--surface); border:1.5px solid var(--border); border-radius:6px; width:160px; outline:none; padding:6px 8px; min-width:0; }
+.sgs-choco-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--focus-ring); }
 .sgs-choco-input::placeholder { color:var(--border2); font-style:italic; }
-.sgs-vbadge { font-size:10px; padding:1px 6px; border-radius:4px; font-weight:600; white-space:nowrap; flex-shrink:0; }
+.sgs-vbadge { font-size:11px; padding:4px 8px; border-radius:6px; font-weight:700; white-space:nowrap; flex-shrink:0; }
 .sgs-vbadge-ok   { background:rgba(34,197,94,.15); color:#22c55e; }
 .sgs-vbadge-warn { background:rgba(249,115,22,.12); color:var(--orange); }
 .sgs-vbadge-load { color:var(--muted); font-weight:400; }
-.sgs-vbadge-err  { color:var(--border2); font-style:italic; font-size:9px; }
-.sgs-update-btn { font-size:10px; padding:2px 8px; border-radius:4px; border:1px solid var(--orange); color:var(--orange); background:transparent; cursor:pointer; font-weight:600; white-space:nowrap; flex-shrink:0; }
+.sgs-vbadge-err  { color:var(--border2); font-style:italic; font-size:10px; }
+.sgs-update-btn { font-size:11px; padding:6px 10px; border-radius:6px; border:1px solid var(--orange); color:var(--orange); background:transparent; cursor:pointer; font-weight:700; white-space:nowrap; flex-shrink:0; }
 .sgs-update-btn:hover { background:rgba(249,115,22,.12); }
 .sgs-update-btn:disabled { opacity:.5; cursor:default; }
+.sgs-check-btn { font-size:11px; padding:6px 10px; border-radius:6px; border:1px solid var(--border2); color:var(--text2); background:var(--surface); cursor:pointer; font-weight:700; white-space:nowrap; flex-shrink:0; }
+.sgs-check-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-l2); }
 #inst-args-tooltip { position:fixed; z-index:9999; display:none; padding:5px 10px; background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:11px; font-family:var(--mono); box-shadow:0 4px 12px rgba(0,0,0,.2); pointer-events:none; white-space:nowrap; }
 .sched-target-pill { display:inline-flex; align-items:center; background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:2px 9px; font-size:11px; color:var(--text); font-family:var(--mono); margin:2px; }
 .sched-task-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border); margin-bottom:6px; background:var(--card2); }
@@ -2807,17 +2818,25 @@ function _buildInstallerGrid(list) {
       <div style="flex:1;min-width:0;">
         <div class="sgs-name">${escHtml(f)}</div>
         ${argHtml}
-        <div class="sgs-choco-row" onclick="event.stopPropagation()">
-          <span class="sgs-choco-lbl">🍫</span>
-          <input class="sgs-choco-input" placeholder="ID Chocolatey…"
-            value="${escHtml(chocoId)}"
-            data-file="${escHtml(f)}"
-            onblur="saveChocoId(this.dataset.file, this.value)"
-            onkeydown="if(event.key==='Enter')this.blur()">
-          <span class="sgs-vbadge sgs-vbadge-load" id="${bid}"></span>
-          <button class="sgs-update-btn" id="${uid}" style="display:none"
-            data-choco="${escHtml(chocoId)}"
-            onclick="updateInstaller('${safeF}', this.dataset.choco)">⬆ Màj</button>
+        <div class="sgs-choco-box" onclick="event.stopPropagation()">
+          <div class="sgs-choco-head">
+            <span class="sgs-choco-lbl">🍫 Mise à jour Chocolatey</span>
+            <span class="sgs-vbadge sgs-vbadge-load" id="${bid}"></span>
+          </div>
+          <div class="sgs-choco-hint">Indique l'identifiant du package Chocolatey, puis appuie sur Entrée. Exemple : <strong>Firefox</strong>, <strong>googlechrome</strong>, <strong>vlc</strong>.</div>
+          <div class="sgs-choco-row">
+            <input class="sgs-choco-input" placeholder="Ex: Firefox"
+              title="Saisis l'identifiant du package Chocolatey, puis appuie sur Entrée pour vérifier s'il existe une mise à jour."
+              value="${escHtml(chocoId)}"
+              data-file="${escHtml(f)}"
+              onblur="saveChocoId(this.dataset.file, this.value)"
+              onkeydown="handleChocoIdKeydown(event, this.dataset.file, this.value)">
+            <button class="sgs-check-btn" type="button"
+              onclick="saveChocoId('${safeF}', this.previousElementSibling.value)">Vérifier</button>
+            <button class="sgs-update-btn" id="${uid}" style="display:none"
+              data-choco="${escHtml(chocoId)}"
+              onclick="updateInstaller('${safeF}', this.dataset.choco)">⬆ Mettre à jour</button>
+          </div>
         </div>
       </div>
     </div>`
@@ -2832,13 +2851,16 @@ function _buildInstallerGrid(list) {
 function openInstallSelectModal() {
   loadInstallers()
   document.getElementById('inp-install-filter').value = ''
+  document.getElementById('inp-install-choco-add').value = ''
+  const btn = document.getElementById('btn-install-choco-add')
+  if (btn) { btn.disabled = false; btn.textContent = '🍫 Ajouter un package Chocolatey' }
   document.getElementById('selmod-install').classList.add('open')
 }
 function closeInstallSelectModal() {
   document.getElementById('selmod-install').classList.remove('open')
 }
 
-function pickInstaller(name) {
+function pickInstaller(name, keepModalOpen = false) {
   _selectedInstaller = name
   document.querySelectorAll('#inst-grid .sgs-card').forEach(c =>
     c.classList.toggle('selected', c.dataset.name === name))
@@ -2850,7 +2872,7 @@ function pickInstaller(name) {
   // Afficher le champ args avec la valeur mémorisée
   document.getElementById('inp-install-args').value = _installerArgs[name] || ''
   document.getElementById('install-args-field').style.display = 'block'
-  setTimeout(closeInstallSelectModal, 140)
+  if (!keepModalOpen) setTimeout(closeInstallSelectModal, 140)
 }
 
 function filterInstallModal(q) {
@@ -2869,7 +2891,10 @@ function filterInstallModal(q) {
 async function saveChocoId(filename, chocoId) {
   chocoId = chocoId.trim()
   const prev = (_installerMeta[filename] || {}).choco_id || ''
-  if (chocoId === prev) return
+  if (chocoId === prev) {
+    if (chocoId) checkInstallerVersion(filename, chocoId)
+    return
+  }
   _installerMeta[filename] = Object.assign(_installerMeta[filename] || {}, { choco_id: chocoId })
   // Mettre à jour le data-choco du bouton Màj
   const ids = _vbadgeMap[filename]
@@ -2891,6 +2916,14 @@ async function saveChocoId(filename, chocoId) {
   } catch(e) { console.error('saveChocoId:', e) }
 }
 
+function handleChocoIdKeydown(event, filename, value) {
+  if (event.key !== 'Enter') return
+  event.preventDefault()
+  event.stopPropagation()
+  saveChocoId(filename, value)
+  event.target.blur()
+}
+
 async function checkInstallerVersion(filename, chocoId) {
   const ids = _vbadgeMap[filename]
   if (!ids) return
@@ -2903,35 +2936,46 @@ async function checkInstallerVersion(filename, chocoId) {
   try {
     const r = await fetch(`/api/installer-version-check?id=${encodeURIComponent(chocoId)}`)
     const d = await r.json()
-    if (!d.ok) { badge.className = 'sgs-vbadge sgs-vbadge-err'; badge.textContent = '–'; return }
+    if (!d.ok) {
+      badge.className = 'sgs-vbadge sgs-vbadge-err'
+      badge.textContent = '⚠ vérif KO'
+      badge.title = d.error || 'Échec de vérification Chocolatey'
+      return
+    }
     const latest     = d.version
     const localMatch = filename.match(/(\d+(?:\.\d+)+)/)
     const localVer   = localMatch ? localMatch[1] : null
     if (localVer && localVer === latest) {
       badge.className  = 'sgs-vbadge sgs-vbadge-ok'
-      badge.textContent = '✅ ' + latest
+      badge.textContent = '✅ À jour : ' + latest
+      badge.title = `Version locale : ${localVer} | Version Chocolatey : ${latest}`
     } else {
       badge.className  = 'sgs-vbadge sgs-vbadge-warn'
-      badge.textContent = '⚠ ' + latest + ' dispo'
-      if (btn) { btn.dataset.choco = chocoId; btn.style.display = '' }
+      badge.textContent = '⚠ Mise à jour disponible : ' + latest
+      badge.title = localVer
+        ? `Version locale : ${localVer} | Version Chocolatey : ${latest}`
+        : `Version Chocolatey : ${latest}`
+      if (btn) { btn.dataset.choco = chocoId; btn.dataset.version = latest; btn.style.display = '' }
     }
-  } catch {
+  } catch(e) {
     badge.className  = 'sgs-vbadge sgs-vbadge-err'
-    badge.textContent = '–'
+    badge.textContent = '⚠ Erreur réseau'
+    badge.title = e?.message || 'Erreur réseau'
   }
 }
 
 async function updateInstaller(filename, chocoId) {
-  const ids = _vbadgeMap[filename]
-  const badge = ids ? document.getElementById(ids.badgeId) : null
-  const btn   = ids ? document.getElementById(ids.updId)   : null
+  const ids     = _vbadgeMap[filename]
+  const badge   = ids ? document.getElementById(ids.badgeId) : null
+  const btn     = ids ? document.getElementById(ids.updId)   : null
+  const version = btn?.dataset.version || null
   if (btn)   { btn.disabled = true }
-  if (badge) { badge.className = 'sgs-vbadge sgs-vbadge-load'; badge.textContent = '⬇ téléchargement…' }
+  if (badge) { badge.className = 'sgs-vbadge sgs-vbadge-load'; badge.textContent = '⬇ Téléchargement…'; badge.title = '' }
   try {
     const r = await fetch('/api/installer-update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, choco_id: chocoId })
+      body: JSON.stringify({ filename, choco_id: chocoId, version })
     })
     const d = await r.json()
     if (!d.ok) {
@@ -2941,7 +2985,7 @@ async function updateInstaller(filename, chocoId) {
     }
     const wasSelected = _selectedInstaller === filename
     await loadInstallers()
-    if (wasSelected) pickInstaller(d.filename)
+    if (wasSelected) pickInstaller(d.filename, true)
     showNotif('✅', `Installeur mis à jour : ${d.filename}`)
   } catch(e) {
     if (badge) { badge.className = 'sgs-vbadge sgs-vbadge-err'; badge.textContent = '⚠ Erreur réseau' }
@@ -2967,6 +3011,44 @@ async function uploadInstaller(input) {
   } catch(e) {
     showNotif('❌', `Erreur upload : ${e.message}`)
   }
+}
+
+async function addChocolateyInstaller() {
+  const input = document.getElementById('inp-install-choco-add')
+  const btn   = document.getElementById('btn-install-choco-add')
+  if (!input || !btn) return
+  const chocoId = input.value.trim()
+  if (!chocoId) return showNotif('⚠️', 'Saisissez un identifiant Chocolatey.')
+  const prevLabel = btn.textContent
+  btn.disabled = true
+  btn.textContent = '⏳ Ajout en cours…'
+  try {
+    const r = await fetch('/api/installers/add-choco', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ choco_id: chocoId })
+    })
+    const d = await r.json()
+    if (!d.ok) {
+      showNotif('❌', d.error || 'Ajout du package Chocolatey impossible')
+      return
+    }
+    input.value = ''
+    await loadInstallers()
+    pickInstaller(d.filename, true)
+    showNotif('✅', `Package Chocolatey ajouté : ${d.filename}`)
+  } catch(e) {
+    showNotif('❌', `Erreur ajout package : ${e.message}`)
+  } finally {
+    btn.disabled = false
+    btn.textContent = prevLabel
+  }
+}
+
+function handleAddChocolateyKeydown(event) {
+  if (event.key !== 'Enter') return
+  event.preventDefault()
+  addChocolateyInstaller()
 }
 
 async function _saveInstallerArgs(name, args) {
@@ -6778,7 +6860,16 @@ function settingsShutdownServer() {
       <div class="sgs-empty" id="inst-empty" style="display:none;">Aucun installeur disponible</div>
     </div>
     <div class="selmod-footer">
-      <button class="btn btn-outline" onclick="closeInstallSelectModal();document.getElementById('inp-installer-upload').click();">📤 Uploader un installeur…</button>
+      <div class="selmod-footer-row">
+        <button class="btn btn-outline" onclick="closeInstallSelectModal();document.getElementById('inp-installer-upload').click();">📤 Uploader un installeur…</button>
+        <div class="selmod-footer-grow">
+          <div class="selmod-inline-form">
+            <input type="text" id="inp-install-choco-add" class="selmod-inline-input" placeholder="Ex: GoogleChrome" onkeydown="handleAddChocolateyKeydown(event)">
+            <button class="btn btn-outline" id="btn-install-choco-add" onclick="addChocolateyInstaller()">🍫 Ajouter un package Chocolatey</button>
+          </div>
+          <div class="selmod-inline-hint">Saisis un identifiant Chocolatey pour télécharger automatiquement l'installeur et l'ajouter à la liste.</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

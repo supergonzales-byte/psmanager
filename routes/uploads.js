@@ -43,6 +43,34 @@ router.post('/installers/upload', upload.single('file'), (req, res) => {
     }
 })
 
+router.post('/installers/add-choco', async (req, res) => {
+    const choco_id = String((req.body || {}).choco_id || '').trim()
+    if (!choco_id) return res.status(400).json({ ok: false, error: 'choco_id requis' })
+    const t0 = Date.now()
+    console.log('[installers/add-choco] DÉBUT choco_id=%s', choco_id)
+    try {
+        const { getLatestVersion, downloadInstaller } = require('../lib/chocolatey')
+        if (!fs.existsSync(INSTALLERS_DIR)) fs.mkdirSync(INSTALLERS_DIR, { recursive: true })
+
+        const version = await getLatestVersion(choco_id)
+        console.log('[installers/add-choco] version=%s', version)
+        const filename = await downloadInstaller(choco_id, version, INSTALLERS_DIR)
+        console.log('[installers/add-choco] fichier=%s', filename)
+
+        let meta = {}
+        try { meta = JSON.parse(fs.readFileSync(INSTALLER_META_FILE, 'utf8')) } catch {}
+        meta[filename] = Object.assign(meta[filename] || {}, { choco_id })
+        fs.writeFileSync(INSTALLER_META_FILE, JSON.stringify(meta, null, 2))
+
+        console.log('[installers/add-choco] ✓ TERMINÉ en %dms', Date.now()-t0)
+        res.json({ ok: true, filename, version, choco_id })
+    } catch(e) {
+        console.error('[installers/add-choco] ✗ ERREUR après %dms :', Date.now()-t0, e.message)
+        console.error(e.stack)
+        res.status(500).json({ ok: false, error: e.message })
+    }
+})
+
 router.get('/installer-args', (req, res) => {
     try {
         if (!fs.existsSync(INSTALLER_ARGS_FILE)) return res.json({})
@@ -97,11 +125,15 @@ router.post('/installer-meta', (req, res) => {
 router.get('/installer-version-check', async (req, res) => {
     const { id } = req.query
     if (!id) return res.status(400).json({ ok: false, error: 'id requis' })
+    const t0 = Date.now()
+    console.log('[installer-version-check] DÉBUT id=%s', id)
     try {
         const { getLatestVersion } = require('../lib/chocolatey')
         const version = await getLatestVersion(id)
+        console.log('[installer-version-check] ✓ id=%s → %s (%dms)', id, version, Date.now()-t0)
         res.json({ ok: true, version })
     } catch(e) {
+        console.error('[installer-version-check] ✗ id=%s après %dms :', id, Date.now()-t0, e.message)
         res.json({ ok: false, error: e.message })
     }
 })
@@ -109,13 +141,17 @@ router.get('/installer-version-check', async (req, res) => {
 // ── Mise à jour automatique depuis Chocolatey ─────────────────────────────
 
 router.post('/installer-update', async (req, res) => {
-    const { filename, choco_id } = req.body
+    const { filename, choco_id, version: clientVersion } = req.body
+    console.log('[installer-update] DÉBUT — filename=%s, choco_id=%s, clientVersion=%s', filename, choco_id, clientVersion)
     if (!filename || !choco_id) return res.status(400).json({ ok: false, error: 'filename et choco_id requis' })
+    const t0 = Date.now()
     try {
         const { getLatestVersion, downloadInstaller } = require('../lib/chocolatey')
 
-        const version     = await getLatestVersion(choco_id)
+        const version     = clientVersion || await getLatestVersion(choco_id)
+        console.log('[installer-update] version utilisée =', version)
         const newFilename = await downloadInstaller(choco_id, version, INSTALLERS_DIR)
+        console.log('[installer-update] fichier téléchargé :', newFilename)
 
         // Transférer les args sur le nouveau nom de fichier
         let args = {}
@@ -139,8 +175,11 @@ router.post('/installer-update', async (req, res) => {
             try { if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath) } catch {}
         }
 
+        console.log('[installer-update] ✓ TERMINÉ en %dms', Date.now()-t0)
         res.json({ ok: true, filename: newFilename, version })
     } catch(e) {
+        console.error('[installer-update] ✗ ERREUR après %dms :', Date.now()-t0, e.message)
+        console.error(e.stack)
         res.status(500).json({ ok: false, error: e.message })
     }
 })
