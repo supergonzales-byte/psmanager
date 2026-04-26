@@ -1555,22 +1555,13 @@ header {
 
       <!-- Panneau installation logiciel -->
       <div id="panel-install-software" style="display:none;">
-        <div class="field" style="display:flex;gap:6px;align-items:center;margin-top:6px;">
-          <select id="sel-installer" style="display:none;"></select>
-          <button class="sel-trigger" id="btn-sel-installer" onclick="openInstallSelectModal()" style="flex:1;">
-            <span class="st-icon" id="ico-sel-installer">📦</span>
-            <span class="st-val" id="lbl-sel-installer">Sélectionner un installeur…</span>
-            <span class="st-arrow">▾</span>
-          </button>
-          <input type="file" id="inp-installer-upload" accept=".exe,.msi" style="display:none;" onchange="uploadInstaller(this)">
-        </div>
-        <div id="install-args-field" style="display:none;margin-top:6px;">
-          <div class="field">
-            <label>Arguments</label>
-            <input type="text" id="inp-install-args" placeholder="Ex : /S  /qn  /silent  /VERYSILENT…" style="font-family:var(--mono);"
-              oninput="if(_selectedInstaller) _installerArgs[_selectedInstaller] = this.value">
-          </div>
-        </div>
+        <div id="install-queue-list" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;"></div>
+        <button class="sel-trigger" onclick="openInstallSelectModal()" style="width:100%;margin-top:6px;">
+          <span class="st-icon">📦</span>
+          <span class="st-val">Ajouter un installeur…</span>
+          <span class="st-arrow">▾</span>
+        </button>
+        <input type="file" id="inp-installer-upload" accept=".exe,.msi" style="display:none;" onchange="uploadInstaller(this)">
       </div>
 
       <!-- Panneau déploiement Veyon -->
@@ -2768,7 +2759,7 @@ async function uploadScript(input) {
 let _installerArgs     = {}   // { "vlc.exe": "/S", ... } — chargé depuis le serveur
 let _installerMeta     = {}   // { "vlc.exe": { winget_id: "VideoLAN.VLC" }, ... }
 let _vbadgeMap         = {}   // filename → { badgeId, updId }
-let _selectedInstaller = null // nom du fichier sélectionné
+let _installQueue      = []   // [{ name, args }]
 let installRunning     = false
 let installEs          = null
 let installToken       = null
@@ -2802,7 +2793,6 @@ function _buildInstallerGrid(list) {
   }
   empty.style.display = 'none'
   _vbadgeMap = {}
-  const cur = _selectedInstaller
   grid.innerHTML = list.map((f, i) => {
     const isMsi   = f.toLowerCase().endsWith('.msi')
     const ico     = isMsi ? '📋' : '⚙️'
@@ -2816,7 +2806,7 @@ function _buildInstallerGrid(list) {
       ? `<div class="sgs-args" data-args="${escHtml(saved)}">${escHtml(saved)}</div>`
       : `<div class="sgs-args sgs-args-empty">aucun argument</div>`
     const gid = `winget_box_${i}`
-    return `<div class="sgs-card${f === cur ? ' selected' : ''}" data-name="${escHtml(f)}"
+    return `<div class="sgs-card${_installQueue.some(q => q.name === f) ? ' selected' : ''}" data-name="${escHtml(f)}"
       onclick="pickInstaller('${safeF}')">
       <div class="sgs-ico">${ico}</div>
       <div style="flex:1;min-width:0;">
@@ -2875,19 +2865,40 @@ function closeInstallSelectModal() {
   document.getElementById('selmod-install').classList.remove('open')
 }
 
-function pickInstaller(name, keepModalOpen = false) {
-  _selectedInstaller = name
+function pickInstaller(name) {
+  const idx = _installQueue.findIndex(q => q.name === name)
+  if (idx >= 0) {
+    _installQueue.splice(idx, 1)
+  } else {
+    _installQueue.push({ name, args: _installerArgs[name] || '' })
+  }
   document.querySelectorAll('#inst-grid .sgs-card').forEach(c =>
-    c.classList.toggle('selected', c.dataset.name === name))
-  // Mettre à jour le bouton déclencheur
-  const isMsi = name.toLowerCase().endsWith('.msi')
-  document.getElementById('lbl-sel-installer').textContent = name
-  document.getElementById('ico-sel-installer').textContent = isMsi ? '📋' : '⚙️'
-  document.getElementById('btn-sel-installer').classList.add('has-value')
-  // Afficher le champ args avec la valeur mémorisée
-  document.getElementById('inp-install-args').value = _installerArgs[name] || ''
-  document.getElementById('install-args-field').style.display = 'block'
-  if (!keepModalOpen) setTimeout(closeInstallSelectModal, 140)
+    c.classList.toggle('selected', _installQueue.some(q => q.name === c.dataset.name)))
+  renderInstallQueue()
+}
+
+function renderInstallQueue() {
+  const list = document.getElementById('install-queue-list')
+  if (!list) return
+  list.innerHTML = _installQueue.map((item, i) => {
+    const icon = item.name.toLowerCase().endsWith('.msi') ? '📋' : '⚙️'
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--card2);border:1.5px solid var(--border);border-radius:8px;">
+      <span style="font-size:13px;">${icon}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:12px;font-family:var(--mono);" title="${escHtml(item.name)}">${escHtml(item.name)}</span>
+      <input type="text" value="${escHtml(item.args)}" placeholder="args…"
+        style="width:90px;padding:3px 6px;background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;font-family:var(--mono);"
+        oninput="_installQueue[${i}].args=this.value">
+      <button onclick="removeFromInstallQueue(${i})" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0 2px;line-height:1;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">×</button>
+    </div>`
+  }).join('')
+}
+
+function removeFromInstallQueue(i) {
+  const name = _installQueue[i].name
+  _installQueue.splice(i, 1)
+  renderInstallQueue()
+  document.querySelectorAll('#inst-grid .sgs-card').forEach(c =>
+    c.classList.toggle('selected', _installQueue.some(q => q.name === c.dataset.name)))
 }
 
 function filterInstallModal(q) {
@@ -2997,9 +3008,12 @@ async function updateInstaller(filename, wingetId) {
       if (btn)   btn.disabled = false
       return
     }
-    const wasSelected = _selectedInstaller === filename
+    const queueIdx = _installQueue.findIndex(q => q.name === filename)
     await loadInstallers()
-    if (wasSelected) pickInstaller(d.filename, true)
+    if (queueIdx >= 0) {
+      _installQueue[queueIdx].name = d.filename
+      renderInstallQueue()
+    }
     showNotif('✅', `Installeur mis à jour : ${d.filename}`)
   } catch(e) {
     if (badge) { badge.className = 'sgs-vbadge sgs-vbadge-err'; badge.textContent = '⚠ Erreur réseau' }
@@ -3095,112 +3109,127 @@ function closeInstallModal() {
   document.getElementById('install-modal').style.display = 'none'
 }
 
-async function runInstallBasket(selected, username, password) {
-  const installer = _selectedInstaller
-  const args      = document.getElementById('inp-install-args').value.trim()
-  const throttle  = parseInt(document.getElementById('inp-throttle').value) || 10
-
-  if (!installer) return showNotif('⚠️', 'Sélectionnez un installeur.')
+async function runInstallQueue(selected, username, password) {
+  if (!_installQueue.length) return showNotif('⚠️', 'Ajoutez au moins un installeur.')
   if (!selected || !selected.length) return showNotif('⚠️', 'Sélectionnez au moins un poste.')
   if (!username || !password) return showAlert('Identifiants WinRM requis (champ Utilisateur / Mot de passe).')
 
+  const queue   = [..._installQueue]
   const targets = selected.map(h => h.hostname)
+  const throttle = parseInt(document.getElementById('inp-throttle').value) || 10
 
-  // Init modale résultats
-  document.getElementById('inst-modal-title').textContent = `📦 Installation — ${installer}`
-  document.getElementById('inst-total').textContent  = targets.length
-  document.getElementById('inst-ok').textContent     = '0'
-  document.getElementById('inst-err').textContent    = '0'
-  document.getElementById('inst-status').textContent = 'En cours...'
-  document.getElementById('inst-status').style.color = 'var(--orange)'
-  document.getElementById('inst-results').innerHTML  = ''
-  document.getElementById('inst-prog-fill').style.width = '0%'
-  document.getElementById('inst-prog-pct').textContent  = '0%'
-  document.getElementById('inst-prog-text').textContent = `0 / ${targets.length}`
+  document.getElementById('inst-results').innerHTML = ''
   document.getElementById('inst-modal-close').textContent = '✕ Annuler'
   document.getElementById('install-modal').style.display = 'flex'
-
   installRunning = true
   setModalClosable('install-modal', false)
 
-  // Mémoriser les args avant d'exécuter
-  await _saveInstallerArgs(installer, args)
+  for (let i = 0; i < queue.length; i++) {
+    if (!installRunning) break
+    const { name, args } = queue[i]
+    const stepLabel = queue.length > 1 ? ` — ${i + 1}/${queue.length}` : ` — ${name}`
 
-  // Init token SSE
-  let token
-  try {
-    const init = await fetch('/api/install-init', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ installer, args, targets, username, password, throttle,
-        serverOrigin: window.location.origin })
-    })
-    const data = await init.json()
-    if (!data.token) throw new Error(data.error || 'Erreur init')
-    token = data.token
-  } catch(e) {
-    document.getElementById('inst-status').textContent = `Erreur : ${e.message}`
-    document.getElementById('inst-status').style.color = 'var(--red)'
+    if (i > 0) {
+      const sep = document.createElement('div')
+      sep.style.cssText = 'margin:8px 0 4px;padding:6px 0 0;border-top:1px solid var(--border);font-size:10px;color:var(--muted);text-align:center;letter-spacing:.05em;text-transform:uppercase;'
+      sep.textContent = name
+      document.getElementById('inst-results').appendChild(sep)
+    }
+
+    await runInstallOne(name, args, targets, username, password, throttle, stepLabel)
+  }
+
+  if (installRunning) {
     document.getElementById('inst-modal-close').textContent = 'Fermer'
     setModalClosable('install-modal', true)
     installRunning = false
-    return
   }
+}
 
-  installToken = token
-  installCancelPath = '/api/install-cancel'
-  const es = new EventSource(`/api/install?token=${token}`)
-  installEs = es
+function runInstallOne(installer, args, targets, username, password, throttle, stepLabel) {
+  return new Promise(async resolve => {
+    document.getElementById('inst-modal-title').textContent = `📦 Installation${stepLabel}`
+    document.getElementById('inst-total').textContent  = targets.length
+    document.getElementById('inst-ok').textContent     = '0'
+    document.getElementById('inst-err').textContent    = '0'
+    document.getElementById('inst-status').textContent = 'En cours...'
+    document.getElementById('inst-status').style.color = 'var(--orange)'
+    document.getElementById('inst-prog-fill').style.width = '0%'
+    document.getElementById('inst-prog-pct').textContent  = '0%'
+    document.getElementById('inst-prog-text').textContent = `0 / ${targets.length}`
 
-  es.onmessage = e => {
-    const { type, data } = JSON.parse(e.data)
+    await _saveInstallerArgs(installer, args)
 
-    if (type === 'result') {
-      document.getElementById('inst-ok').textContent  = data.ok
-      document.getElementById('inst-err').textContent = data.err
-      const pct = Math.round(data.done / data.total * 100)
-      document.getElementById('inst-prog-fill').style.width      = pct + '%'
-      document.getElementById('inst-prog-fill').style.background = data.err > 0 ? 'var(--orange)' : 'var(--accent)'
-      document.getElementById('inst-prog-pct').textContent       = pct + '%'
-      document.getElementById('inst-prog-text').textContent      = `${data.done} / ${data.total}`
-
-      const row      = document.createElement('div')
-      row.className  = 'run-host-row'
-      row.style.borderColor = data.success ? '#1a3a1a' : '#3a1a1a'
-      const dot      = data.success ? '✔' : '✖'
-      const dotColor = data.success ? 'var(--green)' : 'var(--red)'
-      const statusTxt = data.success ? (data.output || 'OK') : (data.error || 'Erreur')
-      row.innerHTML = `
-        <div style="min-width:14px;color:${dotColor};font-size:13px;">${dot}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="run-host-name">${escHtml(data.hostname)}</div>
-          <div class="run-host-status" style="color:${dotColor};">${escHtml(statusTxt)}</div>
-        </div>`
-      document.getElementById('inst-results').appendChild(row)
-      document.getElementById('inst-results').scrollTop = 999999
+    let token
+    try {
+      const init = await fetch('/api/install-init', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ installer, args, targets, username, password, throttle,
+          serverOrigin: window.location.origin })
+      })
+      const data = await init.json()
+      if (!data.token) throw new Error(data.error || 'Erreur init')
+      token = data.token
+    } catch(e) {
+      document.getElementById('inst-status').textContent = `Erreur : ${e.message}`
+      document.getElementById('inst-status').style.color = 'var(--red)'
+      installRunning = false
+      resolve()
+      return
     }
 
-    if (type === 'done') {
-      const color = data.err === 0 ? 'var(--green)' : data.ok > 0 ? 'var(--orange)' : 'var(--red)'
-      document.getElementById('inst-status').textContent = `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
-      document.getElementById('inst-status').style.color = color
-      document.getElementById('inst-prog-fill').style.background = color
-      document.getElementById('inst-modal-close').textContent = 'Fermer'
-      setModalClosable('install-modal', true)
+    installToken = token
+    installCancelPath = '/api/install-cancel'
+    const es = new EventSource(`/api/install?token=${token}`)
+    installEs = es
+
+    es.onmessage = e => {
+      const { type, data } = JSON.parse(e.data)
+
+      if (type === 'result') {
+        document.getElementById('inst-ok').textContent  = data.ok
+        document.getElementById('inst-err').textContent = data.err
+        const pct = Math.round(data.done / data.total * 100)
+        document.getElementById('inst-prog-fill').style.width      = pct + '%'
+        document.getElementById('inst-prog-fill').style.background = data.err > 0 ? 'var(--orange)' : 'var(--accent)'
+        document.getElementById('inst-prog-pct').textContent       = pct + '%'
+        document.getElementById('inst-prog-text').textContent      = `${data.done} / ${data.total}`
+
+        const row     = document.createElement('div')
+        row.className = 'run-host-row'
+        row.style.borderColor = data.success ? '#1a3a1a' : '#3a1a1a'
+        const dot      = data.success ? '✔' : '✖'
+        const dotColor = data.success ? 'var(--green)' : 'var(--red)'
+        const statusTxt = data.success ? (data.output || 'OK') : (data.error || 'Erreur')
+        row.innerHTML = `
+          <div style="min-width:14px;color:${dotColor};font-size:13px;">${dot}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="run-host-name">${escHtml(data.hostname)}</div>
+            <div class="run-host-status" style="color:${dotColor};">${escHtml(statusTxt)}</div>
+          </div>`
+        document.getElementById('inst-results').appendChild(row)
+        document.getElementById('inst-results').scrollTop = 999999
+      }
+
+      if (type === 'done') {
+        const color = data.err === 0 ? 'var(--green)' : data.ok > 0 ? 'var(--orange)' : 'var(--red)'
+        document.getElementById('inst-status').textContent = `Terminé — ✔ ${data.ok}  ✖ ${data.err}`
+        document.getElementById('inst-status').style.color = color
+        document.getElementById('inst-prog-fill').style.background = color
+        es.close()
+        installEs = null; installToken = null
+        resolve()
+      }
+    }
+
+    es.onerror = () => {
+      document.getElementById('inst-status').textContent = 'Erreur de connexion SSE'
+      document.getElementById('inst-status').style.color = 'var(--red)'
       es.close()
       installEs = null; installToken = null
-      installRunning = false
+      resolve()
     }
-  }
-
-  es.onerror = () => {
-    document.getElementById('inst-status').textContent = 'Erreur de connexion SSE'
-    document.getElementById('inst-status').style.color = 'var(--red)'
-    document.getElementById('inst-modal-close').textContent = 'Fermer'
-    setModalClosable('install-modal', true)
-    es.close()
-    installEs = null; installToken = null
-    installRunning = false
-  }
+  })
 }
 
 // ══ DÉPLOIEMENT VEYON ════════════════════════════════════════════════════════
@@ -3992,7 +4021,7 @@ async function runSelectedAction() {
     if (action === 'copy-files')       await runCopyFiles(selected, username, password)
     if (action === 'collect-drivers')  await runCollectDrivers(selected, username, password)
     if (action === 'deploy-drivers')   await runDeployDrivers(selected, username, password)
-    if (action === 'install-software') await runInstallBasket(selected, username, password)
+    if (action === 'install-software') await runInstallQueue(selected, username, password)
     if (action === 'deploy-veyon') {
       await refreshVeyonFiles()
       openVeyonFilesModal(() => runVeyonDeploy(selected, username, password))
