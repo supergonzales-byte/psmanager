@@ -7,7 +7,7 @@
 <title>PS Manager</title>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Serif+Display&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
   --bg:        #f2f4f7;
@@ -278,6 +278,44 @@
   --focus-ring:    rgba(120,152,184,.12);
   --btn-shadow:    rgba(120,152,184,.15);
   --btn-shadow-h:  rgba(120,152,184,.25);
+}
+
+.arctic {
+  --bg:        #f0f8ff;
+  --surface:   #ffffff;
+  --panel:     #e4eef8;
+  --card:      #ffffff;
+  --card2:     #f1f7fd;
+  --border:    rgba(37,99,235,.13);
+  --border2:   rgba(37,99,235,.30);
+  --accent:    #2563eb;
+  --accent2:   #60a5fa;
+  --accent-l:  rgba(37,99,235,.08);
+  --accent-l2: rgba(37,99,235,.04);
+  --brown:     #2563eb;
+  --brown2:    #0f172a;
+  --brown-l:   #dbeafe;
+  --green:     #15803d;
+  --green-l:   #dcfce7;
+  --red:       #dc2626;
+  --orange:    #d97706;
+  --text:      #0f172a;
+  --text2:     #334155;
+  --muted:     #64748b;
+  --sans:      'Space Grotesk', system-ui, sans-serif;
+  --shadow:        0 1px 3px rgba(37,99,235,.06), 0 4px 14px rgba(37,99,235,.09);
+  --shadow2:       0 4px 16px rgba(37,99,235,.22), 0 1px 3px rgba(37,99,235,.10);
+  --accent-border: rgba(37,99,235,.25);
+  --focus-ring:    rgba(37,99,235,.12);
+  --btn-shadow:    rgba(37,99,235,.25);
+  --btn-shadow-h:  rgba(37,99,235,.40);
+}
+body.arctic {
+  background:
+    radial-gradient(900px 500px at 90% 0%, #dbeafe, transparent 55%),
+    radial-gradient(700px 450px at 0% 110%, #e0f2fe, transparent 55%),
+    #f0f8ff;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
 }
 
 .btn-theme { background:rgba(255,255,255,.06); border:1.5px solid #2a3a5a; border-radius:8px; color:#90a4c0; width:34px; height:34px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s; flex-shrink:0; position:relative; }
@@ -4895,11 +4933,12 @@ const THEMES = [
   { key: 'acier',   cls: 'acier',   color: '#8fb0c8', label: 'Acier'   },
   { key: 'chrome',  cls: 'chrome',  color: '#c8dce8', label: 'Chrome'  },
   { key: 'mercure', cls: 'mercure', color: '#7898b8', label: 'Mercure' },
+  { key: 'arctic',  cls: 'arctic',  color: '#2563eb', label: 'Arctic'  },
 ]
 
 function applyTheme(key) {
   const t = THEMES.find(x => x.key === key) || THEMES[0]
-  document.body.classList.remove('dark', 'ember', 'sunrise', 'sunset', 'carbon', 'acier', 'chrome', 'mercure')
+  document.body.classList.remove('dark', 'ember', 'sunrise', 'sunset', 'carbon', 'acier', 'chrome', 'mercure', 'arctic')
   if (t.cls) document.body.classList.add(t.cls)
   const btn = document.getElementById('btn-theme')
   if (btn) {
