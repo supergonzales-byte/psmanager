@@ -1093,14 +1093,14 @@ header {
 #inst-grid .sgs-card { overflow:hidden; }
 .sgs-args { font-size:10px; font-family:var(--mono); color:var(--accent); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default; }
 .sgs-args-empty { color:var(--muted); font-style:italic; }
-.sgs-choco-box { margin-top:7px; padding:8px 9px; border:1px solid var(--border); border-radius:8px; background:var(--card2); }
-.sgs-choco-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
-.sgs-choco-lbl { font-size:11px; font-weight:700; color:var(--text2); flex-shrink:0; }
-.sgs-choco-hint { font-size:10px; color:var(--muted); line-height:1.35; margin-bottom:6px; }
-.sgs-choco-row { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
-.sgs-choco-input { font-size:12px; font-family:var(--mono); color:var(--text); background:var(--surface); border:1.5px solid var(--border); border-radius:6px; width:160px; outline:none; padding:6px 8px; min-width:0; }
-.sgs-choco-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--focus-ring); }
-.sgs-choco-input::placeholder { color:var(--border2); font-style:italic; }
+.sgs-winget-box { margin-top:7px; padding:8px 9px; border:1px solid var(--border); border-radius:8px; background:var(--card2); }
+.sgs-winget-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+.sgs-winget-lbl { font-size:11px; font-weight:700; color:var(--text2); flex-shrink:0; }
+.sgs-winget-hint { font-size:10px; color:var(--muted); line-height:1.35; margin-bottom:6px; }
+.sgs-winget-row { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.sgs-winget-input { font-size:12px; font-family:var(--mono); color:var(--text); background:var(--surface); border:1.5px solid var(--border); border-radius:6px; width:160px; outline:none; padding:6px 8px; min-width:0; }
+.sgs-winget-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--focus-ring); }
+.sgs-winget-input::placeholder { color:var(--border2); font-style:italic; }
 .sgs-vbadge { font-size:11px; padding:4px 8px; border-radius:6px; font-weight:700; white-space:nowrap; flex-shrink:0; }
 .sgs-vbadge-ok   { background:rgba(34,197,94,.15); color:#22c55e; }
 .sgs-vbadge-warn { background:rgba(249,115,22,.12); color:var(--orange); }
@@ -2763,7 +2763,7 @@ async function uploadScript(input) {
 // ══ INSTALLATION LOGICIEL ══
 
 let _installerArgs     = {}   // { "vlc.exe": "/S", ... } — chargé depuis le serveur
-let _installerMeta     = {}   // { "vlc.exe": { choco_id: "vlc" }, ... }
+let _installerMeta     = {}   // { "vlc.exe": { winget_id: "VideoLAN.VLC" }, ... }
 let _vbadgeMap         = {}   // filename → { badgeId, updId }
 let _selectedInstaller = null // nom du fichier sélectionné
 let installRunning     = false
@@ -2804,10 +2804,10 @@ function _buildInstallerGrid(list) {
     const isMsi   = f.toLowerCase().endsWith('.msi')
     const ico     = isMsi ? '📋' : '⚙️'
     const saved   = _installerArgs[f] || ''
-    const chocoId = (_installerMeta[f] || {}).choco_id || ''
-    const safeF   = f.replace(/\\/g,'\\\\').replace(/'/g,"\\'")
-    const bid     = `vbadge_${i}`
-    const uid     = `vupd_${i}`
+    const wingetId = (_installerMeta[f] || {}).winget_id || ''
+    const safeF    = f.replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    const bid      = `vbadge_${i}`
+    const uid      = `vupd_${i}`
     _vbadgeMap[f] = { badgeId: bid, updId: uid }
     const argHtml = saved
       ? `<div class="sgs-args" data-args="${escHtml(saved)}">${escHtml(saved)}</div>`
@@ -2818,24 +2818,24 @@ function _buildInstallerGrid(list) {
       <div style="flex:1;min-width:0;">
         <div class="sgs-name">${escHtml(f)}</div>
         ${argHtml}
-        <div class="sgs-choco-box" onclick="event.stopPropagation()">
-          <div class="sgs-choco-head">
-            <span class="sgs-choco-lbl">🍫 Mise à jour Chocolatey</span>
+        <div class="sgs-winget-box" onclick="event.stopPropagation()">
+          <div class="sgs-winget-head">
+            <span class="sgs-winget-lbl">📦 Mise à jour Winget</span>
             <span class="sgs-vbadge sgs-vbadge-load" id="${bid}"></span>
           </div>
-          <div class="sgs-choco-hint">Indique l'identifiant du package Chocolatey, puis appuie sur Entrée. Exemple : <strong>Firefox</strong>, <strong>googlechrome</strong>, <strong>vlc</strong>.</div>
-          <div class="sgs-choco-row">
-            <input class="sgs-choco-input" placeholder="Ex: Firefox"
-              title="Saisis l'identifiant du package Chocolatey, puis appuie sur Entrée pour vérifier s'il existe une mise à jour."
-              value="${escHtml(chocoId)}"
+          <div class="sgs-winget-hint">Indique l'identifiant Winget du package, puis appuie sur Entrée. Exemple : <strong>Mozilla.Firefox</strong>, <strong>Google.Chrome</strong>, <strong>VideoLAN.VLC</strong>.</div>
+          <div class="sgs-winget-row">
+            <input class="sgs-winget-input" placeholder="Ex: Mozilla.Firefox"
+              title="Saisis l'identifiant Winget du package (format Publisher.AppName), puis appuie sur Entrée pour vérifier s'il existe une mise à jour."
+              value="${escHtml(wingetId)}"
               data-file="${escHtml(f)}"
-              onblur="saveChocoId(this.dataset.file, this.value)"
-              onkeydown="handleChocoIdKeydown(event, this.dataset.file, this.value)">
+              onblur="saveWingetId(this.dataset.file, this.value)"
+              onkeydown="handleWingetIdKeydown(event, this.dataset.file, this.value)">
             <button class="sgs-check-btn" type="button"
-              onclick="saveChocoId('${safeF}', this.previousElementSibling.value)">Vérifier</button>
+              onclick="saveWingetId('${safeF}', this.previousElementSibling.value)">Vérifier</button>
             <button class="sgs-update-btn" id="${uid}" style="display:none"
-              data-choco="${escHtml(chocoId)}"
-              onclick="updateInstaller('${safeF}', this.dataset.choco)">⬆ Mettre à jour</button>
+              data-winget="${escHtml(wingetId)}"
+              onclick="updateInstaller('${safeF}', this.dataset.winget)">⬆ Mettre à jour</button>
           </div>
         </div>
       </div>
@@ -2843,17 +2843,17 @@ function _buildInstallerGrid(list) {
   }).join('')
   // Lancer les vérifications de version en arrière-plan
   list.forEach(f => {
-    const chocoId = (_installerMeta[f] || {}).choco_id
-    if (chocoId) checkInstallerVersion(f, chocoId)
+    const wingetId = (_installerMeta[f] || {}).winget_id
+    if (wingetId) checkInstallerVersion(f, wingetId)
   })
 }
 
 function openInstallSelectModal() {
   loadInstallers()
   document.getElementById('inp-install-filter').value = ''
-  document.getElementById('inp-install-choco-add').value = ''
-  const btn = document.getElementById('btn-install-choco-add')
-  if (btn) { btn.disabled = false; btn.textContent = '🍫 Ajouter un package Chocolatey' }
+  document.getElementById('inp-install-winget-add').value = ''
+  const btn = document.getElementById('btn-install-winget-add')
+  if (btn) { btn.disabled = false; btn.textContent = '📦 Ajouter un package Winget' }
   document.getElementById('selmod-install').classList.add('open')
 }
 function closeInstallSelectModal() {
@@ -2888,24 +2888,23 @@ function filterInstallModal(q) {
   if (!n) empty.textContent = 'Aucun installeur trouvé'
 }
 
-async function saveChocoId(filename, chocoId) {
-  chocoId = chocoId.trim()
-  const prev = (_installerMeta[filename] || {}).choco_id || ''
-  if (chocoId === prev) {
-    if (chocoId) checkInstallerVersion(filename, chocoId)
+async function saveWingetId(filename, wingetId) {
+  wingetId = wingetId.trim()
+  const prev = (_installerMeta[filename] || {}).winget_id || ''
+  if (wingetId === prev) {
+    if (wingetId) checkInstallerVersion(filename, wingetId)
     return
   }
-  _installerMeta[filename] = Object.assign(_installerMeta[filename] || {}, { choco_id: chocoId })
-  // Mettre à jour le data-choco du bouton Màj
+  _installerMeta[filename] = Object.assign(_installerMeta[filename] || {}, { winget_id: wingetId })
   const ids = _vbadgeMap[filename]
-  if (ids) { const btn = document.getElementById(ids.updId); if (btn) btn.dataset.choco = chocoId }
+  if (ids) { const btn = document.getElementById(ids.updId); if (btn) btn.dataset.winget = wingetId }
   try {
     await fetch('/api/installer-meta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: filename, choco_id: chocoId || null })
+      body: JSON.stringify({ name: filename, winget_id: wingetId || null })
     })
-    if (chocoId) checkInstallerVersion(filename, chocoId)
+    if (wingetId) checkInstallerVersion(filename, wingetId)
     else {
       const ids = _vbadgeMap[filename]
       if (ids) {
@@ -2913,18 +2912,18 @@ async function saveChocoId(filename, chocoId) {
         const u = document.getElementById(ids.updId);   if (u) u.style.display = 'none'
       }
     }
-  } catch(e) { console.error('saveChocoId:', e) }
+  } catch(e) { console.error('saveWingetId:', e) }
 }
 
-function handleChocoIdKeydown(event, filename, value) {
+function handleWingetIdKeydown(event, filename, value) {
   if (event.key !== 'Enter') return
   event.preventDefault()
   event.stopPropagation()
-  saveChocoId(filename, value)
+  saveWingetId(filename, value)
   event.target.blur()
 }
 
-async function checkInstallerVersion(filename, chocoId) {
+async function checkInstallerVersion(filename, wingetId) {
   const ids = _vbadgeMap[filename]
   if (!ids) return
   const badge = document.getElementById(ids.badgeId)
@@ -2934,37 +2933,37 @@ async function checkInstallerVersion(filename, chocoId) {
   badge.textContent = '🔄'
   if (btn) btn.style.display = 'none'
   try {
-    const r = await fetch(`/api/installer-version-check?id=${encodeURIComponent(chocoId)}`)
+    const r = await fetch(`/api/installer-version-check?id=${encodeURIComponent(wingetId)}`)
     const d = await r.json()
     if (!d.ok) {
       badge.className = 'sgs-vbadge sgs-vbadge-err'
       badge.textContent = '⚠ vérif KO'
-      badge.title = d.error || 'Échec de vérification Chocolatey'
+      badge.title = d.error || 'Échec de vérification Winget'
       return
     }
     const latest     = d.version
     const localMatch = filename.match(/(\d+(?:\.\d+)+)/)
     const localVer   = localMatch ? localMatch[1] : null
     if (localVer && localVer === latest) {
-      badge.className  = 'sgs-vbadge sgs-vbadge-ok'
+      badge.className   = 'sgs-vbadge sgs-vbadge-ok'
       badge.textContent = '✅ À jour : ' + latest
-      badge.title = `Version locale : ${localVer} | Version Chocolatey : ${latest}`
+      badge.title = `Version locale : ${localVer} | Version Winget : ${latest}`
     } else {
-      badge.className  = 'sgs-vbadge sgs-vbadge-warn'
+      badge.className   = 'sgs-vbadge sgs-vbadge-warn'
       badge.textContent = '⚠ Mise à jour disponible : ' + latest
       badge.title = localVer
-        ? `Version locale : ${localVer} | Version Chocolatey : ${latest}`
-        : `Version Chocolatey : ${latest}`
-      if (btn) { btn.dataset.choco = chocoId; btn.dataset.version = latest; btn.style.display = '' }
+        ? `Version locale : ${localVer} | Version Winget : ${latest}`
+        : `Version Winget : ${latest}`
+      if (btn) { btn.dataset.winget = wingetId; btn.dataset.version = latest; btn.style.display = '' }
     }
   } catch(e) {
-    badge.className  = 'sgs-vbadge sgs-vbadge-err'
+    badge.className   = 'sgs-vbadge sgs-vbadge-err'
     badge.textContent = '⚠ Erreur réseau'
     badge.title = e?.message || 'Erreur réseau'
   }
 }
 
-async function updateInstaller(filename, chocoId) {
+async function updateInstaller(filename, wingetId) {
   const ids     = _vbadgeMap[filename]
   const badge   = ids ? document.getElementById(ids.badgeId) : null
   const btn     = ids ? document.getElementById(ids.updId)   : null
@@ -2975,7 +2974,7 @@ async function updateInstaller(filename, chocoId) {
     const r = await fetch('/api/installer-update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, choco_id: chocoId, version })
+      body: JSON.stringify({ filename, winget_id: wingetId, version })
     })
     const d = await r.json()
     if (!d.ok) {
@@ -3013,30 +3012,30 @@ async function uploadInstaller(input) {
   }
 }
 
-async function addChocolateyInstaller() {
-  const input = document.getElementById('inp-install-choco-add')
-  const btn   = document.getElementById('btn-install-choco-add')
+async function addWingetInstaller() {
+  const input = document.getElementById('inp-install-winget-add')
+  const btn   = document.getElementById('btn-install-winget-add')
   if (!input || !btn) return
-  const chocoId = input.value.trim()
-  if (!chocoId) return showNotif('⚠️', 'Saisissez un identifiant Chocolatey.')
+  const wingetId = input.value.trim()
+  if (!wingetId) return showNotif('⚠️', 'Saisissez un identifiant Winget.')
   const prevLabel = btn.textContent
   btn.disabled = true
   btn.textContent = '⏳ Ajout en cours…'
   try {
-    const r = await fetch('/api/installers/add-choco', {
+    const r = await fetch('/api/installers/add-winget', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ choco_id: chocoId })
+      body: JSON.stringify({ winget_id: wingetId })
     })
     const d = await r.json()
     if (!d.ok) {
-      showNotif('❌', d.error || 'Ajout du package Chocolatey impossible')
+      showNotif('❌', d.error || 'Ajout du package Winget impossible')
       return
     }
     input.value = ''
     await loadInstallers()
     pickInstaller(d.filename, true)
-    showNotif('✅', `Package Chocolatey ajouté : ${d.filename}`)
+    showNotif('✅', `Package Winget ajouté : ${d.filename}`)
   } catch(e) {
     showNotif('❌', `Erreur ajout package : ${e.message}`)
   } finally {
@@ -3045,10 +3044,10 @@ async function addChocolateyInstaller() {
   }
 }
 
-function handleAddChocolateyKeydown(event) {
+function handleAddWingetKeydown(event) {
   if (event.key !== 'Enter') return
   event.preventDefault()
-  addChocolateyInstaller()
+  addWingetInstaller()
 }
 
 async function _saveInstallerArgs(name, args) {
@@ -6864,10 +6863,10 @@ function settingsShutdownServer() {
         <button class="btn btn-outline" onclick="closeInstallSelectModal();document.getElementById('inp-installer-upload').click();">📤 Uploader un installeur…</button>
         <div class="selmod-footer-grow">
           <div class="selmod-inline-form">
-            <input type="text" id="inp-install-choco-add" class="selmod-inline-input" placeholder="Ex: GoogleChrome" onkeydown="handleAddChocolateyKeydown(event)">
-            <button class="btn btn-outline" id="btn-install-choco-add" onclick="addChocolateyInstaller()">🍫 Ajouter un package Chocolatey</button>
+            <input type="text" id="inp-install-winget-add" class="selmod-inline-input" placeholder="Ex: Google.Chrome" onkeydown="handleAddWingetKeydown(event)">
+            <button class="btn btn-outline" id="btn-install-winget-add" onclick="addWingetInstaller()">📦 Ajouter un package Winget</button>
           </div>
-          <div class="selmod-inline-hint">Saisis un identifiant Chocolatey pour télécharger automatiquement l'installeur et l'ajouter à la liste.</div>
+          <div class="selmod-inline-hint">Saisis un identifiant Winget (format Publisher.AppName) pour télécharger automatiquement l'installeur et l'ajouter à la liste. Ex : <strong>Google.Chrome</strong>, <strong>Mozilla.Firefox</strong>, <strong>VideoLAN.VLC</strong>. <a href="https://winget.run/" target="_blank" rel="noopener">Trouver un ID Winget</a></div>
         </div>
       </div>
     </div>

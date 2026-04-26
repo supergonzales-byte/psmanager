@@ -43,29 +43,29 @@ router.post('/installers/upload', upload.single('file'), (req, res) => {
     }
 })
 
-router.post('/installers/add-choco', async (req, res) => {
-    const choco_id = String((req.body || {}).choco_id || '').trim()
-    if (!choco_id) return res.status(400).json({ ok: false, error: 'choco_id requis' })
+router.post('/installers/add-winget', async (req, res) => {
+    const winget_id = String((req.body || {}).winget_id || '').trim()
+    if (!winget_id) return res.status(400).json({ ok: false, error: 'winget_id requis' })
     const t0 = Date.now()
-    console.log('[installers/add-choco] DÉBUT choco_id=%s', choco_id)
+    console.log('[installers/add-winget] DÉBUT winget_id=%s', winget_id)
     try {
-        const { getLatestVersion, downloadInstaller } = require('../lib/chocolatey')
+        const { getLatestVersion, downloadInstaller } = require('../lib/winget')
         if (!fs.existsSync(INSTALLERS_DIR)) fs.mkdirSync(INSTALLERS_DIR, { recursive: true })
 
-        const version = await getLatestVersion(choco_id)
-        console.log('[installers/add-choco] version=%s', version)
-        const filename = await downloadInstaller(choco_id, version, INSTALLERS_DIR)
-        console.log('[installers/add-choco] fichier=%s', filename)
+        const version = await getLatestVersion(winget_id)
+        console.log('[installers/add-winget] version=%s', version)
+        const filename = await downloadInstaller(winget_id, version, INSTALLERS_DIR)
+        console.log('[installers/add-winget] fichier=%s', filename)
 
         let meta = {}
         try { meta = JSON.parse(fs.readFileSync(INSTALLER_META_FILE, 'utf8')) } catch {}
-        meta[filename] = Object.assign(meta[filename] || {}, { choco_id })
+        meta[filename] = Object.assign(meta[filename] || {}, { winget_id })
         fs.writeFileSync(INSTALLER_META_FILE, JSON.stringify(meta, null, 2))
 
-        console.log('[installers/add-choco] ✓ TERMINÉ en %dms', Date.now()-t0)
-        res.json({ ok: true, filename, version, choco_id })
+        console.log('[installers/add-winget] ✓ TERMINÉ en %dms', Date.now()-t0)
+        res.json({ ok: true, filename, version, winget_id })
     } catch(e) {
-        console.error('[installers/add-choco] ✗ ERREUR après %dms :', Date.now()-t0, e.message)
+        console.error('[installers/add-winget] ✗ ERREUR après %dms :', Date.now()-t0, e.message)
         console.error(e.stack)
         res.status(500).json({ ok: false, error: e.message })
     }
@@ -92,7 +92,7 @@ router.post('/installer-args', (req, res) => {
     }
 })
 
-// ── Métadonnées installeurs (choco_id, …) ─────────────────────────────────
+// ── Métadonnées installeurs (winget_id, …) ────────────────────────────────
 
 router.get('/installer-meta', (req, res) => {
     try {
@@ -102,15 +102,15 @@ router.get('/installer-meta', (req, res) => {
 })
 
 router.post('/installer-meta', (req, res) => {
-    const { name, choco_id } = req.body
+    const { name, winget_id } = req.body
     if (!name) return res.status(400).json({ ok: false, error: 'Nom requis' })
     try {
         let data = {}
         try { data = JSON.parse(fs.readFileSync(INSTALLER_META_FILE, 'utf8')) } catch {}
-        if (choco_id) {
-            data[name] = Object.assign(data[name] || {}, { choco_id })
+        if (winget_id) {
+            data[name] = Object.assign(data[name] || {}, { winget_id })
         } else {
-            if (data[name]) delete data[name].choco_id
+            if (data[name]) delete data[name].winget_id
             if (data[name] && !Object.keys(data[name]).length) delete data[name]
         }
         fs.writeFileSync(INSTALLER_META_FILE, JSON.stringify(data, null, 2))
@@ -120,7 +120,7 @@ router.post('/installer-meta', (req, res) => {
     }
 })
 
-// ── Vérification version Chocolatey ──────────────────────────────────────
+// ── Vérification version Winget ───────────────────────────────────────────
 
 router.get('/installer-version-check', async (req, res) => {
     const { id } = req.query
@@ -128,7 +128,7 @@ router.get('/installer-version-check', async (req, res) => {
     const t0 = Date.now()
     console.log('[installer-version-check] DÉBUT id=%s', id)
     try {
-        const { getLatestVersion } = require('../lib/chocolatey')
+        const { getLatestVersion } = require('../lib/winget')
         const version = await getLatestVersion(id)
         console.log('[installer-version-check] ✓ id=%s → %s (%dms)', id, version, Date.now()-t0)
         res.json({ ok: true, version })
@@ -138,19 +138,19 @@ router.get('/installer-version-check', async (req, res) => {
     }
 })
 
-// ── Mise à jour automatique depuis Chocolatey ─────────────────────────────
+// ── Mise à jour automatique depuis Winget ─────────────────────────────────
 
 router.post('/installer-update', async (req, res) => {
-    const { filename, choco_id, version: clientVersion } = req.body
-    console.log('[installer-update] DÉBUT — filename=%s, choco_id=%s, clientVersion=%s', filename, choco_id, clientVersion)
-    if (!filename || !choco_id) return res.status(400).json({ ok: false, error: 'filename et choco_id requis' })
+    const { filename, winget_id, version: clientVersion } = req.body
+    console.log('[installer-update] DÉBUT — filename=%s, winget_id=%s, clientVersion=%s', filename, winget_id, clientVersion)
+    if (!filename || !winget_id) return res.status(400).json({ ok: false, error: 'filename et winget_id requis' })
     const t0 = Date.now()
     try {
-        const { getLatestVersion, downloadInstaller } = require('../lib/chocolatey')
+        const { getLatestVersion, downloadInstaller } = require('../lib/winget')
 
-        const version     = clientVersion || await getLatestVersion(choco_id)
+        const version     = clientVersion || await getLatestVersion(winget_id)
         console.log('[installer-update] version utilisée =', version)
-        const newFilename = await downloadInstaller(choco_id, version, INSTALLERS_DIR)
+        const newFilename = await downloadInstaller(winget_id, version, INSTALLERS_DIR)
         console.log('[installer-update] fichier téléchargé :', newFilename)
 
         // Transférer les args sur le nouveau nom de fichier
@@ -165,7 +165,7 @@ router.post('/installer-update', async (req, res) => {
         // Transférer les métadonnées
         let meta = {}
         try { meta = JSON.parse(fs.readFileSync(INSTALLER_META_FILE, 'utf8')) } catch {}
-        meta[newFilename] = Object.assign(meta[filename] || {}, { choco_id })
+        meta[newFilename] = Object.assign(meta[filename] || {}, { winget_id })
         if (filename !== newFilename) delete meta[filename]
         fs.writeFileSync(INSTALLER_META_FILE, JSON.stringify(meta, null, 2))
 
