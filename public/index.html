@@ -1090,12 +1090,15 @@ header {
 .sgs-manual-confirm button { font-size:11px; padding:5px 14px; border-radius:6px; border:none; background:var(--accent); color:#fff; cursor:pointer; font-weight:600; }
 .sgs-manual-confirm button:hover { filter:brightness(1.1); }
 #inst-grid { grid-template-columns: 1fr; }
-#inst-grid .sgs-card { overflow:hidden; }
+#inst-grid .sgs-card { overflow:hidden; align-items:flex-start; }
+.sgs-card-main { display:flex; align-items:center; gap:8px; width:100%; }
+.sgs-card-info { flex:1; min-width:0; }
 .sgs-args { font-size:10px; font-family:var(--mono); color:var(--accent); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default; }
 .sgs-args-empty { color:var(--muted); font-style:italic; }
-.sgs-winget-box { margin-top:7px; padding:8px 9px; border:1px solid var(--border); border-radius:8px; background:var(--card2); }
-.sgs-winget-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
-.sgs-winget-lbl { font-size:11px; font-weight:700; color:var(--text2); flex-shrink:0; }
+.sgs-gear-btn { flex-shrink:0; background:none; border:1px solid var(--border); border-radius:6px; color:var(--muted); cursor:pointer; font-size:12px; padding:3px 7px; line-height:1; transition:border-color .15s, color .15s; }
+.sgs-gear-btn:hover, .sgs-gear-btn.active { border-color:var(--accent); color:var(--accent); }
+.sgs-winget-box { display:none; margin-top:8px; padding:8px 9px; border:1px solid var(--border); border-radius:8px; background:var(--card2); }
+.sgs-winget-box.open { display:block; }
 .sgs-winget-hint { font-size:10px; color:var(--muted); line-height:1.35; margin-bottom:6px; }
 .sgs-winget-row { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
 .sgs-winget-input { font-size:12px; font-family:var(--mono); color:var(--text); background:var(--surface); border:1.5px solid var(--border); border-radius:6px; width:160px; outline:none; padding:6px 8px; min-width:0; }
@@ -2812,21 +2815,25 @@ function _buildInstallerGrid(list) {
     const argHtml = saved
       ? `<div class="sgs-args" data-args="${escHtml(saved)}">${escHtml(saved)}</div>`
       : `<div class="sgs-args sgs-args-empty">aucun argument</div>`
+    const gid = `winget_box_${i}`
     return `<div class="sgs-card${f === cur ? ' selected' : ''}" data-name="${escHtml(f)}"
       onclick="pickInstaller('${safeF}')">
       <div class="sgs-ico">${ico}</div>
       <div style="flex:1;min-width:0;">
-        <div class="sgs-name">${escHtml(f)}</div>
-        ${argHtml}
-        <div class="sgs-winget-box" onclick="event.stopPropagation()">
-          <div class="sgs-winget-head">
-            <span class="sgs-winget-lbl">📦 Mise à jour Winget</span>
-            <span class="sgs-vbadge sgs-vbadge-load" id="${bid}"></span>
+        <div class="sgs-card-main">
+          <div class="sgs-card-info">
+            <div class="sgs-name">${escHtml(f)}</div>
+            ${argHtml}
           </div>
-          <div class="sgs-winget-hint">Indique l'identifiant Winget du package, puis appuie sur Entrée. Exemple : <strong>Mozilla.Firefox</strong>, <strong>Google.Chrome</strong>, <strong>VideoLAN.VLC</strong>.</div>
+          <span class="sgs-vbadge sgs-vbadge-load" id="${bid}"></span>
+          <button class="sgs-gear-btn" id="gear_${i}" title="Gérer la mise à jour Winget"
+            onclick="event.stopPropagation();toggleInstallerWinget('${gid}','gear_${i}')">⚙</button>
+        </div>
+        <div class="sgs-winget-box" id="${gid}" onclick="event.stopPropagation()">
+          <div class="sgs-winget-hint">Identifiant Winget du package (format Publisher.AppName). Ex : <strong>Mozilla.Firefox</strong>, <strong>Google.Chrome</strong>.</div>
           <div class="sgs-winget-row">
             <input class="sgs-winget-input" placeholder="Ex: Mozilla.Firefox"
-              title="Saisis l'identifiant Winget du package (format Publisher.AppName), puis appuie sur Entrée pour vérifier s'il existe une mise à jour."
+              title="Saisis l'identifiant Winget, puis Entrée pour vérifier."
               value="${escHtml(wingetId)}"
               data-file="${escHtml(f)}"
               onblur="saveWingetId(this.dataset.file, this.value)"
@@ -2855,6 +2862,14 @@ function openInstallSelectModal() {
   const btn = document.getElementById('btn-install-winget-add')
   if (btn) { btn.disabled = false; btn.textContent = '📦 Ajouter un package Winget' }
   document.getElementById('selmod-install').classList.add('open')
+}
+
+function toggleInstallerWinget(boxId, gearId) {
+  const box  = document.getElementById(boxId)
+  const gear = document.getElementById(gearId)
+  if (!box) return
+  const isOpen = box.classList.toggle('open')
+  if (gear) gear.classList.toggle('active', isOpen)
 }
 function closeInstallSelectModal() {
   document.getElementById('selmod-install').classList.remove('open')
