@@ -7,7 +7,7 @@
 <title>PS Manager</title>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,700;1,9..144,500&display=swap');
 
 :root {
   --bg:        #f2f4f7;
@@ -132,32 +132,40 @@
 
 .ember {
   --bg:        #1c1917;
-  --surface:   #292524;
-  --panel:     #211f1e;
-  --card:      #292524;
-  --card2:     #302c2a;
-  --border:    #44403c;
-  --border2:   #78716c;
+  --surface:   #26201c;
+  --panel:     #211d19;
+  --card:      #26201c;
+  --card2:     #2a241f;
+  --border:    rgba(245,158,11,.18);
+  --border2:   rgba(245,158,11,.38);
   --accent:    #f59e0b;
-  --accent2:   #fb923c;
-  --accent-l:  rgba(245,158,11,.1);
+  --accent2:   #fbbf24;
+  --accent-l:  rgba(245,158,11,.10);
   --accent-l2: rgba(245,158,11,.06);
   --brown:     #f59e0b;
   --brown2:    #0c0a09;
   --brown-l:   rgba(245,158,11,.08);
   --green:     #4ade80;
-  --green-l:   rgba(74,222,128,.1);
+  --green-l:   rgba(74,222,128,.10);
   --red:       #f87171;
   --orange:    #fb923c;
-  --text:      #fafaf9;
-  --text2:     #d6cfc8;
-  --muted:     #a8a29e;
+  --text:      #f5e8d0;
+  --text2:     #e7d2a5;
+  --muted:     #a1865a;
+  --sans:      'Fraunces', Georgia, serif;
   --shadow:        0 1px 3px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.4);
-  --shadow2:       0 4px 16px rgba(245,158,11,.22), 0 1px 3px rgba(0,0,0,.5);
-  --accent-border: rgba(245,158,11,.4);
+  --shadow2:       0 4px 16px rgba(245,158,11,.25), 0 1px 3px rgba(0,0,0,.5);
+  --accent-border: rgba(245,158,11,.38);
   --focus-ring:    rgba(245,158,11,.15);
-  --btn-shadow:    rgba(245,158,11,.3);
-  --btn-shadow-h:  rgba(245,158,11,.45);
+  --btn-shadow:    rgba(245,158,11,.30);
+  --btn-shadow-h:  rgba(245,158,11,.48);
+}
+body.ember {
+  background:
+    radial-gradient(1100px 600px at 85% -15%, rgba(245,158,11,.15), transparent 65%),
+    radial-gradient(600px 400px at 10% 110%, rgba(234,88,12,.12), transparent 65%),
+    #1c1917;
+  font-family: 'Fraunces', Georgia, serif;
 }
 
 .carbon {
@@ -4928,12 +4936,12 @@ const THEMES = [
   { key: 'sunrise', cls: 'sunrise', color: '#7b83e8', label: 'Aurore'  },
   { key: 'sunset',  cls: 'sunset',  color: '#f0834a', label: 'Couchant'},
   { key: 'dark',    cls: 'dark',    color: '#d4714a', label: 'Nuit'    },
-  { key: 'ember',   cls: 'ember',   color: '#f59e0b', label: 'Ember'   },
   { key: 'carbon',  cls: 'carbon',  color: '#111111', label: 'Carbone' },
   { key: 'acier',   cls: 'acier',   color: '#8fb0c8', label: 'Acier'   },
   { key: 'chrome',  cls: 'chrome',  color: '#c8dce8', label: 'Chrome'  },
   { key: 'mercure', cls: 'mercure', color: '#7898b8', label: 'Mercure' },
   { key: 'arctic',  cls: 'arctic',  color: '#2563eb', label: 'Arctic'  },
+  { key: 'ember',   cls: 'ember',   color: '#f59e0b', label: 'Ember'   },
 ]
 
 function applyTheme(key) {
