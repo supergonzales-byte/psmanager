@@ -5858,6 +5858,42 @@ async function openSettingsModal() {
     await _settingsLoadAutostart()
     await _settingsLoadHttps()
     await _settingsLoadLdap()
+    await _settingsLoadGithubToken()
+}
+
+async function _settingsLoadGithubToken() {
+    const msg = document.getElementById('settings-github-token-msg')
+    try {
+        const d = await fetch('/api/admin/github-token').then(r => r.json())
+        msg.style.color = d.set ? 'var(--green)' : 'var(--muted)'
+        msg.textContent = d.set ? '✔ Token configuré' : 'Aucun token — vérification de version limitée à 60 req/h'
+    } catch { msg.textContent = '' }
+}
+
+async function settingsSaveGithubToken() {
+    const input = document.getElementById('settings-github-token')
+    const msg   = document.getElementById('settings-github-token-msg')
+    const token = input.value.trim()
+    msg.style.color = 'var(--muted)'
+    msg.textContent = 'Enregistrement…'
+    try {
+        const d = await fetch('/api/admin/github-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        }).then(r => r.json())
+        if (d.ok) {
+            input.value = ''
+            msg.style.color = 'var(--green)'
+            msg.textContent = token ? '✔ Token enregistré' : '✔ Token supprimé'
+        } else {
+            msg.style.color = 'var(--red)'
+            msg.textContent = d.error || 'Erreur'
+        }
+    } catch(e) {
+        msg.style.color = 'var(--red)'
+        msg.textContent = 'Erreur réseau'
+    }
 }
 
 function closeSettingsModal() {
@@ -6831,6 +6867,21 @@ function settingsShutdownServer() {
             <span id="settings-ldap-msg" style="font-size:11px;color:var(--muted);"></span>
           </div>
         </div>
+      </div>
+
+      <!-- Séparateur -->
+      <div style="border-top:1px solid var(--border);"></div>
+
+      <!-- Section GitHub Token -->
+      <div>
+        <div style="font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;">GitHub API</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Token personnel pour la vérification des mises à jour Winget. Aucune permission requise.</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="settings-github-token" type="password" placeholder="ghp_…"
+            style="flex:1;padding:7px 10px;background:var(--card2);border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-family:var(--mono);">
+          <button onclick="settingsSaveGithubToken()" style="padding:7px 14px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity .15s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">Enregistrer</button>
+        </div>
+        <div id="settings-github-token-msg" style="font-size:11px;margin-top:6px;"></div>
       </div>
 
       <!-- Séparateur -->

@@ -104,6 +104,38 @@ router.post('/admin/https-regen-cert', (req, res) => {
     }
 })
 
+// ── GitHub Token ──
+const ENV_FILE = path.join(__dirname, '..', '.env')
+
+function readEnv() {
+    try { return fs.readFileSync(ENV_FILE, 'utf8') } catch { return '' }
+}
+
+function writeEnvToken(token) {
+    let content = readEnv()
+    if (/^GITHUB_TOKEN=.*/m.test(content)) {
+        content = content.replace(/^GITHUB_TOKEN=.*/m, `GITHUB_TOKEN=${token}`)
+    } else {
+        content = content.trimEnd() + (content ? '\n' : '') + `GITHUB_TOKEN=${token}\n`
+    }
+    fs.writeFileSync(ENV_FILE, content)
+}
+
+router.get('/admin/github-token', (req, res) => {
+    res.json({ set: !!process.env.GITHUB_TOKEN })
+})
+
+router.post('/admin/github-token', (req, res) => {
+    const token = String((req.body || {}).token || '').trim()
+    try {
+        writeEnvToken(token)
+        process.env.GITHUB_TOKEN = token
+        res.json({ ok: true })
+    } catch(e) {
+        res.json({ ok: false, error: e.message })
+    }
+})
+
 // ── Historique des logins ──
 router.post('/login-history', (req, res) => {
     const { target, username, password, months = 6 } = req.body
