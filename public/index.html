@@ -3129,9 +3129,9 @@ async function runInstallQueue(selected, username, password) {
     const { name, args } = queue[i]
     const stepLabel = queue.length > 1 ? ` — ${i + 1}/${queue.length}` : ` — ${name}`
 
-    if (i > 0) {
+    if (queue.length > 1) {
       const sep = document.createElement('div')
-      sep.style.cssText = 'margin:8px 0 4px;padding:6px 0 0;border-top:1px solid var(--border);font-size:10px;color:var(--muted);text-align:center;letter-spacing:.05em;text-transform:uppercase;'
+      sep.style.cssText = `${i > 0 ? 'border-top:1px solid var(--border);margin-top:8px;padding-top:6px;' : ''}margin-bottom:4px;font-size:10px;color:var(--muted);text-align:center;letter-spacing:.05em;text-transform:uppercase;`
       sep.textContent = name
       document.getElementById('inst-results').appendChild(sep)
     }
