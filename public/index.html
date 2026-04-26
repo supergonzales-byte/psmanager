@@ -3055,9 +3055,23 @@ async function checkInstallerVersion(filename, wingetId) {
     const latest     = d.version
     const localMatch = filename.match(/(\d+(?:\.\d+)+)/)
     const localVer   = localMatch ? localMatch[1] : null
-    if (localVer && localVer === latest) {
+    const cmpVer = (a, b) => {
+      const pa = a.split('.').map(Number), pb = b.split('.').map(Number)
+      const len = Math.max(pa.length, pb.length)
+      for (let i = 0; i < len; i++) {
+        const diff = (pa[i] || 0) - (pb[i] || 0)
+        if (diff !== 0) return diff
+      }
+      return 0
+    }
+    const cmp = localVer ? cmpVer(localVer, latest) : -1
+    if (localVer && cmp === 0) {
       badge.className   = 'sgs-vbadge sgs-vbadge-ok'
       badge.textContent = '✅ À jour : ' + latest
+      badge.title = `Version locale : ${localVer} | Version Winget : ${latest}`
+    } else if (cmp > 0) {
+      badge.className   = 'sgs-vbadge sgs-vbadge-ok'
+      badge.textContent = '✅ Locale plus récente : ' + localVer
       badge.title = `Version locale : ${localVer} | Version Winget : ${latest}`
     } else {
       badge.className   = 'sgs-vbadge sgs-vbadge-warn'
@@ -7267,7 +7281,8 @@ function renderVeyonFileRows() {
         versionBadge = `<div style="font-size:10px;color:var(--muted);margin-top:4px;">Impossible de vérifier la version GitHub</div>`
       } else {
         const latestVer = _veyonLatestRelease.version
-        const upToDate  = currentVer && latestVer && currentVer === latestVer
+        const _cmpV = (a, b) => { const pa = a.split('.').map(Number), pb = b.split('.').map(Number), l = Math.max(pa.length, pb.length); for (let i = 0; i < l; i++) { const d = (pa[i]||0)-(pb[i]||0); if (d) return d } return 0 }
+        const upToDate  = currentVer && latestVer && _cmpV(currentVer, latestVer) >= 0
         if (upToDate) {
           versionBadge = `<div style="font-size:10px;color:var(--green);margin-top:4px;">✓ À jour (${latestVer})</div>`
         } else {
