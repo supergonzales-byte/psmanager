@@ -7,7 +7,7 @@
 <title>PS Manager</title>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,700;1,9..144,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Serif+Display&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,700;1,9..144,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
 
 :root {
   --bg:        #f2f4f7;
@@ -166,6 +166,45 @@ body.ember {
     radial-gradient(600px 400px at 10% 110%, rgba(234,88,12,.12), transparent 65%),
     #1c1917;
   font-family: 'Fraunces', Georgia, serif;
+}
+
+.obsidian {
+  --bg:        #0d1117;
+  --surface:   #0f141b;
+  --panel:     #090d12;
+  --card:      #11161d;
+  --card2:     #161b22;
+  --border:    #21262d;
+  --border2:   #30363d;
+  --accent:    #58a6ff;
+  --accent2:   #79c0ff;
+  --accent-l:  rgba(88,166,255,.10);
+  --accent-l2: rgba(88,166,255,.06);
+  --brown:     #58a6ff;
+  --brown2:    #010409;
+  --brown-l:   rgba(88,166,255,.08);
+  --green:     #7ee787;
+  --green-l:   rgba(126,231,135,.08);
+  --red:       #f85149;
+  --orange:    #d29922;
+  --text:      #c9d1d9;
+  --text2:     #8b949e;
+  --muted:     #6e7681;
+  --sans:      'JetBrains Mono', ui-monospace, monospace;
+  --mono:      'JetBrains Mono', monospace;
+  --shadow:        0 1px 3px rgba(0,0,0,.6), 0 4px 12px rgba(0,0,0,.5);
+  --shadow2:       0 4px 16px rgba(88,166,255,.15), 0 1px 3px rgba(0,0,0,.6);
+  --accent-border: rgba(88,166,255,.30);
+  --focus-ring:    rgba(88,166,255,.15);
+  --btn-shadow:    rgba(88,166,255,.20);
+  --btn-shadow-h:  rgba(88,166,255,.35);
+}
+body.obsidian {
+  background:
+    radial-gradient(1000px 600px at 80% -10%, rgba(88,166,255,.08), transparent 70%),
+    radial-gradient(800px 500px at -10% 100%, rgba(88,166,255,.05), transparent 70%),
+    #0d1117;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 .carbon {
@@ -4941,12 +4980,13 @@ const THEMES = [
   { key: 'chrome',  cls: 'chrome',  color: '#c8dce8', label: 'Chrome'  },
   { key: 'mercure', cls: 'mercure', color: '#7898b8', label: 'Mercure' },
   { key: 'arctic',  cls: 'arctic',  color: '#2563eb', label: 'Arctic'  },
-  { key: 'ember',   cls: 'ember',   color: '#f59e0b', label: 'Ember'   },
+  { key: 'ember',    cls: 'ember',    color: '#f59e0b', label: 'Ember'    },
+  { key: 'obsidian', cls: 'obsidian', color: '#58a6ff', label: 'Obsidian' },
 ]
 
 function applyTheme(key) {
   const t = THEMES.find(x => x.key === key) || THEMES[0]
-  document.body.classList.remove('dark', 'ember', 'sunrise', 'sunset', 'carbon', 'acier', 'chrome', 'mercure', 'arctic')
+  document.body.classList.remove('dark', 'ember', 'sunrise', 'sunset', 'carbon', 'acier', 'chrome', 'mercure', 'arctic', 'obsidian')
   if (t.cls) document.body.classList.add(t.cls)
   const btn = document.getElementById('btn-theme')
   if (btn) {
