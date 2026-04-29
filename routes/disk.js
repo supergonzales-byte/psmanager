@@ -2,13 +2,17 @@ const express = require('express')
 const fs      = require('fs')
 const path    = require('path')
 const { PARC_FILE } = require('../lib/constants')
+const { checkPort5985 } = require('../scan')
 
 const router = express.Router()
 
 router.post('/disk', async (req, res) => {
-    const { hostname, username, password } = req.body
+    const { hostname, ip, username, password } = req.body
     if (!hostname || !username || !password)
         return res.status(400).json({ ok: false, error: 'Parametres manquants' })
+
+    const alive = await checkPort5985(ip || hostname, 5000).catch(() => false)
+    if (!alive) return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
 
     const { spawn } = require('child_process')
     const psCmd = `

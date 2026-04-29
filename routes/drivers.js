@@ -75,7 +75,7 @@ router.post('/copy-files', upload.array('files', 500), async (req, res) => {
 })
 
 router.post('/collect-drivers', async (req, res) => {
-    const { hostname, modele, username, password } = req.body
+    const { hostname, ip, modele, username, password } = req.body
     if (!hostname || !modele || !username || !password)
         return res.status(400).json({ error: 'Paramètres manquants' })
 
@@ -88,7 +88,7 @@ router.post('/collect-drivers', async (req, res) => {
 
     try {
         const result = await collectDrivers({
-            hostname, modele, username, password,
+            hostname, ip, modele, username, password,
             driversBase: DRIVERS_BASE,
             onProgress : data => send('progress', typeof data === 'object' ? data : { message: data })
         })

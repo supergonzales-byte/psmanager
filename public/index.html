@@ -1810,6 +1810,15 @@ let basket     = new Set()
 let groupVars  = {}
 let hostStatus = {}
 
+function hostRef(hostname) {
+  const h = allHosts.find(x => x.hostname === hostname)
+  return { hostname, ip: h?.ip || '' }
+}
+
+function basketHosts() {
+  return [...basket].map(hostRef)
+}
+
 function updateOnlineCount() {
   const total   = allHosts.length
   const online  = Object.values(hostStatus).filter(v => v === true).length
@@ -1981,7 +1990,7 @@ async function hostAction(action, hostname, ip) {
 
   const res  = await fetch('/api/action', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ action, hostname, ip: hostname, username, password })
+    body: JSON.stringify({ action, hostname, ip, username, password })
   })
   const data = await res.json()
   if (action === 'session') {
@@ -1998,7 +2007,7 @@ async function _doAction(action, hostname, ip, username, password) {
     const res = await fetch('/api/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, hostname, ip: hostname, username, password })
+      body: JSON.stringify({ action, hostname, ip, username, password })
     });
     const data = await res.json();
     if (data.ok) {
@@ -2034,7 +2043,7 @@ async function sendMsg() {
   document.getElementById('msg-btn').disabled = true
   const res  = await fetch('/api/action', {
     method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ action:'msg', hostname:msgTarget.hostname, ip:msgTarget.hostname, username, password, message })
+    body: JSON.stringify({ action:'msg', hostname:msgTarget.hostname, ip:msgTarget.ip, username, password, message })
   })
   const data = await res.json()
   const s = document.getElementById('msg-status')
@@ -2196,7 +2205,7 @@ function openDetail(hostname) {
   if (username && password && h.ip) {
     fetch('/api/disk', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ hostname, ip: hostname, username, password })
+      body: JSON.stringify({ hostname, ip: h.ip, username, password })
     }).then(r => r.json()).then(data => {
       if (data.ok) {
         const pct   = data.used / data.total
@@ -2263,7 +2272,7 @@ let psTerm   = null
 let psWs     = null
 
 function openPs(hostname, ip) {
-  psTarget = { hostname, ip: hostname }
+  psTarget = { hostname, ip }
   const username = document.getElementById('inp-user').value.trim()
   const password = document.getElementById('inp-pass').value
   if (!username || !password) { showAlert('Identifiants WinRM requis.'); return }
@@ -3214,7 +3223,7 @@ async function runInstallQueue(selected, username, password) {
   if (!username || !password) return showAlert('Identifiants WinRM requis (champ Utilisateur / Mot de passe).')
 
   const queue   = [..._installQueue]
-  const targets = selected.map(h => h.hostname)
+  const targets = selected.map(h => ({ hostname: h.hostname, ip: h.ip || '' }))
   const throttle = parseInt(document.getElementById('inp-throttle').value) || 10
 
   document.getElementById('inst-results').innerHTML = ''
@@ -3339,7 +3348,7 @@ async function runVeyonDeploy(selected, username, password) {
   if (!selected || !selected.length) return showNotif('⚠️', 'Sélectionnez au moins un poste.')
   if (!username || !password) return showAlert('Identifiants WinRM requis.')
 
-  const targets = selected.map(h => h.hostname)
+  const targets = selected.map(h => ({ hostname: h.hostname, ip: h.ip || '' }))
 
   document.getElementById('inst-modal-title').textContent = `🖥️ Déploiement Veyon`
   document.getElementById('inst-total').textContent  = targets.length
@@ -3494,7 +3503,7 @@ function renderHostRow(h) {
       <button class="hbtn" id="pbtn-${hn}" title="Ping" onclick="event.stopPropagation();pingHost('${hn}','${ip}')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4"/><path d="M17.7 17.7a8 8 0 0 0 0-11.4"/><path d="M3.5 3.5a14 14 0 0 0 0 17"/><path d="M20.5 20.5a14 14 0 0 0 0-17"/></svg></button>
       <button class="hbtn" title="Bureau à distance" onclick="event.stopPropagation();openRdp('${ip}','${hn}')"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg></button>
       <button class="hbtn" title="Terminal PowerShell" onclick="event.stopPropagation();openPs('${hn}','${ip}')"><svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button>
-      <button class="hbtn" title="Explorer les fichiers" onclick="event.stopPropagation();openFileExplorer([{hostname:'${hn}'}],document.getElementById('inp-user').value,document.getElementById('inp-pass').value)"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+      <button class="hbtn" title="Explorer les fichiers" onclick="event.stopPropagation();openFileExplorer([{hostname:'${hn}',ip:'${ip}'}],document.getElementById('inp-user').value,document.getElementById('inp-pass').value)"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
       <button class="hbtn" title="Éditeur de registre" onclick="event.stopPropagation();openRegistry('${hn}',document.getElementById('inp-user').value,document.getElementById('inp-pass').value)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v6M14 17.5h6"/></svg></button>
       <button class="hbtn" title="Session utilisateur" onclick="event.stopPropagation();hostAction('session','${hn}','${ip}')"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
       <button class="hbtn" title="Envoyer un message" onclick="event.stopPropagation();openMsg('${hn}','${ip}')"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
@@ -3566,7 +3575,7 @@ async function sessionGroup(g) {
     try {
       const res  = await fetch('/api/action', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ action:'session', hostname:h.hostname, username, password })
+        body: JSON.stringify({ action:'session', hostname:h.hostname, ip:h.ip, username, password })
       })
       const data = await res.json()
       return { hostname: h.hostname, output: data.ok ? data.output : '', error: !data.ok, errorMsg: data.error || '' }
@@ -3644,7 +3653,7 @@ async function actionGroup(action, g) {
     try {
       const init = await fetch('/api/action-bulk-init', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ action, targets: hosts.map(h => h.hostname), username, password, throttle })
+        body: JSON.stringify({ action, targets: hosts.map(h => ({ hostname: h.hostname, ip: h.ip || '' })), username, password, throttle })
       })
       const data = await init.json()
       if (!data.token) throw new Error(data.error || 'Erreur init')
@@ -3860,7 +3869,7 @@ async function runScript() {
   if (basket.size === 0) return showNotif('⚠️', 'Sélectionnez au moins un poste.')
   if (!username || !password) return showAlert('Identifiants WinRM requis.')
 
-  const targets  = [...basket].join(',')
+  const targets  = basketHosts()
   const runLabel = script || (_scriptBlock.length > 40 ? _scriptBlock.substring(0,40).replace(/\n/g,' ')+'…' : _scriptBlock.replace(/\n/g,' '))
 
   // Init modale
@@ -3884,7 +3893,7 @@ async function runScript() {
   try {
     const init = await fetch('/api/run-init', {
       method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ script: script || undefined, scriptBlock: _scriptBlock || undefined, targets, username, password, throttle })
+        body: JSON.stringify({ script: script || undefined, scriptBlock: _scriptBlock || undefined, targets, username, password, throttle })
     })
     const data = await init.json()
     if (!data.token) throw new Error(data.error || 'Erreur init')
@@ -3965,7 +3974,7 @@ async function actionBasket(action) {
   const username = document.getElementById('inp-user').value.trim()
   const password = document.getElementById('inp-pass').value
   if (!username || !password) return showAlert('Identifiants WinRM requis (champ Utilisateur / Mot de passe).')
-  const hosts    = [...basket].map(hn => ({ hostname: hn }))
+  const hosts    = basketHosts()
   const label    = action === 'off' ? 'Éteindre' : 'Redémarrer'
   const svgIcon  = action === 'off'
     ? `<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>`
@@ -3989,7 +3998,7 @@ async function actionBasket(action) {
     try {
       const init = await fetch('/api/action-bulk-init', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ action, targets: hosts.map(h => h.hostname), username, password, throttle })
+        body: JSON.stringify({ action, targets: hosts, username, password, throttle })
       })
       const data = await init.json()
       if (!data.token) throw new Error(data.error || 'Erreur init')
@@ -4115,7 +4124,7 @@ async function runSelectedAction() {
     if (!username || !password) return showAlert('Identifiants WinRM requis (champ Utilisateur / Mot de passe).')
 
     // Construire la liste d'objets depuis le Set de hostnames
-    const selected = [...basket].map(hn => ({ hostname: hn }))
+    const selected = basketHosts()
 
     if (action === 'copy-files')       await runCopyFiles(selected, username, password)
     if (action === 'collect-drivers')  await runCollectDrivers(selected, username, password)
@@ -4131,6 +4140,7 @@ async function runSelectedAction() {
 // ══ EXPLORATEUR DE FICHIERS DISTANT ══════════════════════════════════════════
 
 let _fsHostname = ''
+let _fsIp       = ''
 let _fsUsername = ''
 let _fsPassword = ''
 let _fsPath     = 'C:\\'
@@ -4141,6 +4151,7 @@ function openFileExplorer(selected, username, password) {
     if (!username || !password) { showAlert('Identifiants WinRM requis.'); return }
     if (selected.length !== 1) return showAlert('Sélectionnez <strong>un seul poste</strong> pour l\'explorateur.')
     _fsHostname = selected[0].hostname
+    _fsIp       = selected[0].ip || ''
     _fsUsername = username
     _fsPassword = password
     _fsPath     = 'C:\\'
@@ -4168,7 +4179,7 @@ async function fsLoad(remotePath) {
     fsBreadcrumb(remotePath)
 
     try {
-        const res  = await fetch('/api/fs/list', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath }) })
+        const res  = await fetch('/api/fs/list', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, ip: _fsIp, username: _fsUsername, password: _fsPassword, path: remotePath }) })
         const data = await res.json()
 
         if (!data.ok) {
@@ -4259,7 +4270,7 @@ async function fsDownload() {
         : `${spin} Téléchargement de ${displayName}...`)
 
     try {
-        const res = await fetch('/api/fs/download', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath, isDir: isDir ? 'true' : 'false' }) })
+        const res = await fetch('/api/fs/download', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, ip: _fsIp, username: _fsUsername, password: _fsPassword, path: remotePath, isDir: isDir ? 'true' : 'false' }) })
         if (!res.ok) {
             const err = await res.json()
             fsSetStatus(`✖ Erreur : ${err.error}`)
@@ -4287,7 +4298,7 @@ async function fsDelete() {
     showConfirm(icon, `Supprimer <strong>${escHtml(name)}</strong>${isDir ? ' et tout son contenu' : ''} ?`, async () => {
         fsSetStatus(`🗑 Suppression de ${name}...`)
         try {
-            const res  = await fetch('/api/fs/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, path: remotePath, isDir }) })
+            const res  = await fetch('/api/fs/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ hostname: _fsHostname, ip: _fsIp, username: _fsUsername, password: _fsPassword, path: remotePath, isDir }) })
             const data = await res.json()
             if (data.ok) { fsSetStatus(`✔ Supprimé : ${name}`); fsRefresh() }
             else          fsSetStatus(`✖ Erreur : ${data.error}`)
@@ -4302,7 +4313,7 @@ async function fsMkdir() {
     fsSetStatus('📁 Création du dossier...')
     try {
         const res  = await fetch('/api/fs/mkdir', { method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ hostname: _fsHostname, username: _fsUsername, password: _fsPassword, remotePath }) })
+            body: JSON.stringify({ hostname: _fsHostname, ip: _fsIp, username: _fsUsername, password: _fsPassword, remotePath }) })
         const data = await res.json()
         if (data.ok) { fsSetStatus(`✔ Dossier créé : ${name.trim()}`); fsRefresh() }
         else          fsSetStatus(`✖ Erreur : ${data.error}`)
@@ -4347,6 +4358,7 @@ async function fsUpload(event) {
             const fd = new FormData()
             fd.append('file', file)
             fd.append('hostname',   _fsHostname)
+            fd.append('ip',         _fsIp)
             fd.append('username',   _fsUsername)
             fd.append('password',   _fsPassword)
             fd.append('remotePath', remotePath)
@@ -4482,7 +4494,7 @@ async function runCopyFiles(selected, username, password) {
         formData.append('files', file)
         formData.append('relativePaths', relPath)
     })
-    formData.append('targets', JSON.stringify(selected.map(h => ({ hostname: h.hostname }))))
+    formData.append('targets', JSON.stringify(selected.map(h => ({ hostname: h.hostname, ip: h.ip || '' }))))
     formData.append('destination', dest)
     formData.append('username', username)
     formData.append('password', password)
@@ -4548,7 +4560,7 @@ async function runCollectDrivers(selected, username, password) {
     const res = await fetch('/api/collect-drivers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostname: h.hostname, modele, username, password })
+        body: JSON.stringify({ hostname: h.hostname, ip: h.ip || '', modele, username, password })
     })
         const reader  = res.body.getReader()
         const decoder = new TextDecoder()
@@ -4660,7 +4672,7 @@ async function runDeployDrivers(selected, username, password) {
                 signal : _actionAbortCtrl.signal,
                 body   : JSON.stringify({
                     modele     : chosenModel,
-                    targets    : selected.map(h => ({ hostname: h.hostname })),
+                    targets    : selected.map(h => ({ hostname: h.hostname, ip: h.ip || '' })),
                     username, password,
                     concurrency: 3
                 })
@@ -5616,7 +5628,7 @@ function openCopyRecap() {
 async function launchCopyFiles() {
     if (basket.size === 0) return showAlert('Sélectionnez au moins un poste.')
     if (!_copyQueue.length) return showAlert('Aucun fichier sélectionné.')
-    const selected = [...basket].map(hn => ({ hostname: hn }))
+    const selected = basketHosts()
     const username = document.getElementById('inp-user').value.trim()
     const password = document.getElementById('inp-pass').value
     if (!username || !password) return showAlert('Identifiants WinRM requis (champ Utilisateur / Mot de passe).')

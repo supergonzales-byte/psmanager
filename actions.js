@@ -4,6 +4,12 @@ const fs        = require('fs')
 const path      = require('path')
 const os        = require('os')
 
+function normalizeTarget(target) {
+    return typeof target === 'string'
+        ? { hostname: target, ip: '' }
+        : { hostname: target.hostname, ip: target.ip || '' }
+}
+
 /**
  * Copie un fichier local vers un ou plusieurs postes distants via WinRM
  * Utilise Copy-Item -ToSession (pas de limite de taille contrairement à Invoke-Command)
@@ -18,8 +24,8 @@ async function copyFileToHosts({ filePath, fileName, relPath, destination, targe
     async function worker() {
         while (index < targets.length) {
             if (isCancelled && isCancelled()) return
-            const { hostname } = targets[index++]
-            const res = await copyOneFile({ hostname, filePath, fileName: safeFileName, relPath, destination: dest, username, password })
+            const { hostname, ip } = normalizeTarget(targets[index++])
+            const res = await copyOneFile({ hostname, ip, filePath, fileName: safeFileName, relPath, destination: dest, username, password })
             done++
             if (res.ok) okCount++; else errCount++
             results.push(res)
@@ -32,9 +38,9 @@ async function copyFileToHosts({ filePath, fileName, relPath, destination, targe
     return { ok: okCount, err: errCount, results }
 }
 
-function copyOneFile({ hostname, filePath, fileName, relPath, destination, username, password }) {
+function copyOneFile({ hostname, ip, filePath, fileName, relPath, destination, username, password }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, hostname, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -104,9 +110,9 @@ try {
  * Aspire les drivers d'un poste distant et les copie dans
  * C:\ps-manager\Drivers\<modele>\ sur le serveur Node
  */
-function collectDrivers({ hostname, modele, username, password, driversBase, onProgress }) {
+function collectDrivers({ hostname, ip, modele, username, password, driversBase, onProgress }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, hostname, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw  = password.replace(/'/g, "''")
@@ -220,8 +226,8 @@ async function deployDrivers({ modelePath, targets, username, password, concurre
     async function worker() {
         while (index < targets.length) {
             if (isCancelled && isCancelled()) return
-            const { hostname } = targets[index++]
-            const res = await deployOneHost({ hostname, allFiles, modelePath, destOnHost, username, password,
+            const { hostname, ip } = normalizeTarget(targets[index++])
+            const res = await deployOneHost({ hostname, ip, allFiles, modelePath, destOnHost, username, password,
                 onFileProgress: data => onProgress({ done, total: targets.length, ok: okCount, err: errCount, fileProgress: { ...data, hostname }, result: null })
             })
             done++
@@ -235,9 +241,9 @@ async function deployDrivers({ modelePath, targets, username, password, concurre
     return { ok: okCount, err: errCount }
 }
 
-function deployOneHost({ hostname, allFiles, modelePath, destOnHost, username, password, onFileProgress }) {
+function deployOneHost({ hostname, ip, allFiles, modelePath, destOnHost, username, password, onFileProgress }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, hostname, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw  = password.replace(/'/g, "''")
@@ -377,9 +383,9 @@ try {
  * Liste le contenu d'un dossier distant via WinRM
  * Renvoie { ok, items: [{ isDir, name, size, modified, attributes }] }
  */
-function listDirectory({ hostname, username, password, remotePath }) {
+function listDirectory({ hostname, ip, username, password, remotePath }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -445,9 +451,9 @@ try {
  * Télécharge un fichier distant vers le serveur Node (tmp) via Copy-Item -FromSession
  * Renvoie { ok, localPath, fileName } — le serveur Node streame ensuite localPath vers le navigateur
  */
-function downloadFile({ hostname, username, password, remotePath }) {
+function downloadFile({ hostname, ip, username, password, remotePath }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -501,9 +507,9 @@ try {
 /**
  * Supprime un fichier ou dossier sur un poste distant
  */
-function deleteRemote({ hostname, username, password, remotePath, isDir }) {
+function deleteRemote({ hostname, ip, username, password, remotePath, isDir }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -554,9 +560,9 @@ try {
 /**
  * Crée un dossier sur un poste distant
  */
-function mkdirRemote({ hostname, username, password, remotePath }) {
+function mkdirRemote({ hostname, ip, username, password, remotePath }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -605,9 +611,9 @@ try {
  * Upload un fichier local (sur le serveur Node) vers un dossier distant
  * Réutilise Copy-Item -ToSession — aucune limite de taille
  */
-function uploadToRemote({ hostname, username, password, localPath, remotePath, fileName }) {
+function uploadToRemote({ hostname, ip, username, password, localPath, remotePath, fileName }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const escapedPw   = password.replace(/'/g, "''")
@@ -668,9 +674,9 @@ try {
  * Zippe le résultat avec archiver, retourne { ok, localPath, fileName }
  * Le zip tmp est nettoyé par le caller après stream
  */
-function downloadDirectory({ hostname, username, password, remotePath }) {
+function downloadDirectory({ hostname, ip, username, password, remotePath }) {
     return new Promise(async resolve => {
-        const alive = await checkPort5985(hostname, 1500).catch(() => false)
+        const alive = await checkPort5985(ip || hostname, 1500).catch(() => false)
         if (!alive) return resolve({ ok: false, error: 'Poste éteint ou WinRM inaccessible' })
 
         const dirName   = path.basename(remotePath)

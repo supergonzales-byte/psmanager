@@ -5,20 +5,27 @@ const router           = express.Router()
 const actionSessions   = new Map()
 const actionCancelled  = new Map()
 
+function normalizeTarget(target) {
+    return typeof target === 'string'
+        ? { hostname: target, ip: '' }
+        : { hostname: target.hostname, ip: target.ip || '' }
+}
+
 router.post('/action-bulk-cancel', (req, res) => {
     if (req.query.token) actionCancelled.set(req.query.token, true)
     res.json({ ok: true })
 })
 
 router.post('/action', async (req, res) => {
-    const { action, hostname, username, password, message } = req.body
+    const { action, hostname, ip, username, password, message } = req.body
     if (!action || !hostname || !username || !password)
         return res.status(400).json({ error: 'Parametres manquants' })
 
     const target = hostname
+    const probeTarget = ip || hostname
     const { spawn } = require('child_process')
 
-    const alive = await checkPort5985(target, 5000).catch(() => false)
+    const alive = await checkPort5985(probeTarget, 5000).catch(() => false)
     if (!alive) return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
 
     const psCommands = {
@@ -89,7 +96,7 @@ router.get('/action-bulk', async (req, res) => {
     }
 
     const { spawn } = require('child_process')
-    const hostList  = targets.map(h => (typeof h === 'string' ? h : h.hostname))
+    const hostList  = targets.map(normalizeTarget).filter(h => h.hostname)
     const total     = hostList.length
     let done = 0, okCount = 0, errCount = 0, index = 0
 
@@ -101,8 +108,10 @@ router.get('/action-bulk', async (req, res) => {
 
     send('start', { total, action })
 
-    async function runOne(hostname) {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+    async function runOne(targetInfo) {
+        const hostname = targetInfo.hostname
+        const probeTarget = targetInfo.ip || hostname
+        const alive = await checkPort5985(probeTarget, 5000).catch(() => false)
         if (!alive) return { hostname, ok: false, error: 'Poste éteint ou port 5985 fermé' }
         const psScript = `
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -135,8 +144,8 @@ try { ${psCmd(hostname)}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.E
 
     async function worker() {
         while (index < hostList.length && !isCancelled()) {
-            const hostname = hostList[index++]
-            const result   = await runOne(hostname)
+            const targetInfo = hostList[index++]
+            const result   = await runOne(targetInfo)
             done++
             if (result.ok) okCount++; else errCount++
             send('result', { done, total, ok: okCount, err: errCount, hostname, success: result.ok, error: result.error })

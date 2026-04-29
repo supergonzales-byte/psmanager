@@ -9,6 +9,12 @@ const router = express.Router()
 const runSessions   = new Map()
 const runCancelled  = new Map()
 
+function normalizeTarget(target) {
+    return typeof target === 'string'
+        ? { hostname: target, ip: '' }
+        : { hostname: target.hostname, ip: target.ip || '' }
+}
+
 router.post('/run-cancel', (req, res) => {
     if (req.query.token) runCancelled.set(req.query.token, true)
     res.json({ ok: true })
@@ -57,7 +63,9 @@ router.get('/run', async (req, res) => {
         if (!res.writableEnded) res.write(`data: ${JSON.stringify({ type, data })}\n\n`)
     }
 
-    const hostList = targets.split(',').map(h => h.trim()).filter(Boolean)
+    const hostList = Array.isArray(targets)
+        ? targets.map(normalizeTarget).filter(h => h.hostname)
+        : String(targets).split(',').map(h => h.trim()).filter(Boolean).map(normalizeTarget)
     const total    = hostList.length
     let done       = 0, okCount = 0, errCount = 0, index = 0
 
@@ -70,10 +78,12 @@ router.get('/run', async (req, res) => {
 
     async function worker() {
         while (index < hostList.length && !authFailed && !isCancelled()) {
-            const hostname = hostList[index++]
+            const targetInfo = hostList[index++]
+            const hostname = targetInfo.hostname
+            const probeTarget = targetInfo.ip || hostname
             const result = scriptBlock
-                ? await runOneScriptBlock(scriptBlock, hostname, hostname, username, password)
-                : await runOneScript(scriptPath, hostname, hostname, username, password)
+                ? await runOneScriptBlock(scriptBlock, hostname, hostname, username, password, probeTarget)
+                : await runOneScript(scriptPath, hostname, hostname, username, password, probeTarget)
             done++
             if (result.ok) okCount++; else errCount++
             if (result.error && result.error.startsWith('ERR_AUTH')) authFailed = true

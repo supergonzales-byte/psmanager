@@ -10,6 +10,12 @@ const router            = express.Router()
 const installSessions   = new Map()
 const installCancelled  = new Map()
 
+function normalizeTarget(target) {
+    return typeof target === 'string'
+        ? { hostname: target, ip: '' }
+        : { hostname: target.hostname, ip: target.ip || '' }
+}
+
 router.post('/install-cancel', (req, res) => {
     if (req.query.token) installCancelled.set(req.query.token, true)
     res.json({ ok: true })
@@ -58,8 +64,10 @@ router.get('/install', async (req, res) => {
 
     send('start', { total, installer })
 
-    async function runOneInstall(hostname) {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+    async function runOneInstall(targetInfo) {
+        const hostname = targetInfo.hostname
+        const probeTarget = targetInfo.ip || hostname
+        const alive = await checkPort5985(probeTarget, 5000).catch(() => false)
         if (!alive) return { ok: false, hostname, error: 'Poste éteint ou port 5985 fermé' }
 
         const safePass = password.replace(/'/g, "''")
@@ -155,8 +163,8 @@ public class PsmTrustAll : ICertificatePolicy {
 
     async function worker() {
         while (index < targets.length && !authFailed && !isCancelled()) {
-            const hostname = targets[index++]
-            const result   = await runOneInstall(hostname)
+            const targetInfo = normalizeTarget(targets[index++])
+            const result   = await runOneInstall(targetInfo)
             done++
             if (result.ok) okCount++; else errCount++
             if (result.error && result.error.startsWith('ERR_AUTH')) authFailed = true

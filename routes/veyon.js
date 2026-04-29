@@ -13,6 +13,9 @@ const { ldapGetComputerOU, getLdapConfig } = require('../lib/ldap')
 const router = express.Router()
 const upload = multer({ dest: os.tmpdir() })
 const isTeacher = hn => /^.+-.+-p\d{2}$/i.test(hn)
+const normalizeTarget = target => typeof target === 'string'
+    ? { hostname: target, ip: '' }
+    : { hostname: target.hostname, ip: target.ip || '' }
 
 // Liste les fichiers Veyon disponibles sur le serveur
 router.get('/veyon-files-list', (req, res) => {
@@ -101,8 +104,10 @@ router.get('/veyon-deploy', async (req, res) => {
     let done = 0, okCount = 0, errCount = 0, index = 0
     send('start', { total, installer })
 
-    async function runOneVeyon(hostname) {
-        const alive = await checkPort5985(hostname, 5000).catch(() => false)
+    async function runOneVeyon(targetInfo) {
+        const hostname = targetInfo.hostname
+        const probeTarget = targetInfo.ip || hostname
+        const alive = await checkPort5985(probeTarget, 5000).catch(() => false)
         if (!alive) return { ok: false, hostname, error: 'Poste eteint ou port 5985 ferme' }
 
         let preLocation   = ''
@@ -290,8 +295,8 @@ public class PsmVeyonSSL : ICertificatePolicy {
 
     async function worker() {
         while (index < targets.length && !authFailed && !isCancelled()) {
-            const hostname = targets[index++]
-            const result   = await runOneVeyon(hostname)
+            const targetInfo = normalizeTarget(targets[index++])
+            const result   = await runOneVeyon(targetInfo)
             done++
             if (result.ok) okCount++; else errCount++
             // Arrêt immédiat si credentials invalides — évite de verrouiller le compte AD
