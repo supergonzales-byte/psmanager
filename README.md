@@ -110,8 +110,6 @@ Le déploiement Veyon se pilote depuis l'action **Déployer Veyon**. PSManager a
 
 L'interface permet de déposer les fichiers, récupérer l'installeur Veyon, générer une configuration par défaut et générer une paire de clés. Le déploiement copie les fichiers depuis le serveur vers les postes, désinstalle une ancienne version si nécessaire, installe Veyon silencieusement, importe la configuration et redémarre le service.
 
-Les postes professeurs peuvent recevoir la clé privée et une liste de machines issue de l'OU Active Directory lorsque LDAP est configuré.
-
 ## HTTPS et LDAP
 
 HTTPS s'active depuis les paramètres. Le serveur écoute alors sur le port `443` et utilise `ssl/key.pem` / `ssl/cert.pem`. Si les certificats n'existent pas, un certificat auto-signé est généré automatiquement au démarrage.
