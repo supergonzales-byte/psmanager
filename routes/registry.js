@@ -2,6 +2,7 @@ const express = require('express')
 const fs      = require('fs')
 const os      = require('os')
 const path    = require('path')
+const { checkPort5985 } = require('../scan')
 
 const router = express.Router()
 
@@ -31,10 +32,16 @@ function regPs(psScript, timeout = 30000) {
     })
 }
 
+async function isReachable(hostname, ip) {
+    return checkPort5985(ip || hostname, 5000).catch(() => false)
+}
+
 router.post('/reg-list', async (req, res) => {
-    const { hostname, username, password, keyPath } = req.body
+    const { hostname, ip, username, password, keyPath } = req.body
     if (!hostname || !username || !password || !keyPath)
         return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+    if (!await isReachable(hostname, ip))
+        return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
     const esc = s => s.replace(/'/g, "''")
     const ps = `
 $pw   = ConvertTo-SecureString '${esc(password)}' -AsPlainText -Force
@@ -74,9 +81,11 @@ try {
 })
 
 router.post('/reg-set', async (req, res) => {
-    const { hostname, username, password, keyPath, name, kind, value } = req.body
+    const { hostname, ip, username, password, keyPath, name, kind, value } = req.body
     if (!hostname || !username || !password || !keyPath || name === undefined)
         return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+    if (!await isReachable(hostname, ip))
+        return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
     const esc = s => s.replace(/'/g, "''")
     const kindMap = { String:'String', ExpandString:'ExpandString', Binary:'Binary', DWord:'DWord', QWord:'QWord', MultiString:'MultiString' }
     const psKind  = kindMap[kind] || 'String'
@@ -103,7 +112,11 @@ try {
 })
 
 router.post('/reg-delete-value', async (req, res) => {
-    const { hostname, username, password, keyPath, name } = req.body
+    const { hostname, ip, username, password, keyPath, name } = req.body
+    if (!hostname || !username || !password || !keyPath || name === undefined)
+        return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+    if (!await isReachable(hostname, ip))
+        return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
     const esc = s => s.replace(/'/g, "''")
     const ps = `
 $pw   = ConvertTo-SecureString '${esc(password)}' -AsPlainText -Force
@@ -125,7 +138,11 @@ try {
 })
 
 router.post('/reg-delete-key', async (req, res) => {
-    const { hostname, username, password, keyPath } = req.body
+    const { hostname, ip, username, password, keyPath } = req.body
+    if (!hostname || !username || !password || !keyPath)
+        return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+    if (!await isReachable(hostname, ip))
+        return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
     const esc = s => s.replace(/'/g, "''")
     const ps = `
 $pw   = ConvertTo-SecureString '${esc(password)}' -AsPlainText -Force
@@ -147,7 +164,11 @@ try {
 })
 
 router.post('/reg-create-key', async (req, res) => {
-    const { hostname, username, password, keyPath } = req.body
+    const { hostname, ip, username, password, keyPath } = req.body
+    if (!hostname || !username || !password || !keyPath)
+        return res.status(400).json({ ok: false, error: 'Paramètres manquants' })
+    if (!await isReachable(hostname, ip))
+        return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
     const esc = s => s.replace(/'/g, "''")
     const ps = `
 $pw   = ConvertTo-SecureString '${esc(password)}' -AsPlainText -Force

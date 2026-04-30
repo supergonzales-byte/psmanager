@@ -5,6 +5,7 @@ const crypto  = require('crypto')
 const { PORT, HTTPS_PORT, SSL_KEY, SSL_CERT } = require('../lib/constants')
 const { loadConfig, saveConfig, ensureSslCert } = require('../lib/config')
 const { loadUsers, saveUsers } = require('../lib/users')
+const { checkPort5985 } = require('../scan')
 
 const router = express.Router()
 
@@ -137,10 +138,13 @@ router.post('/admin/github-token', (req, res) => {
 })
 
 // ── Historique des logins ──
-router.post('/login-history', (req, res) => {
-    const { target, username, password, months = 6 } = req.body
+router.post('/login-history', async (req, res) => {
+    const { target, ip, username, password, months = 6 } = req.body
     if (!target || !username || !password)
         return res.status(400).json({ error: 'Paramètres manquants' })
+
+    const alive = await checkPort5985(ip || target, 5000).catch(() => false)
+    if (!alive) return res.json({ ok: false, error: 'Poste éteint ou port 5985 fermé' })
 
     const safeTarget = String(target).replace(/'/g, "''")
     const safeUser   = String(username).replace(/'/g, "''")

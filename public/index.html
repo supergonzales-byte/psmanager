@@ -1831,6 +1831,9 @@ let groupVars  = {}
 let hostStatus = {}
 const UI_LAYOUT_KEY = 'psm-ui-layout-v1'
 const DEFAULT_UI_MODULE_ORDER = ['credentials', 'script', 'throttle', 'actions', 'schedule', 'power', 'parc']
+const IDLE_LOGOUT_MS = 60 * 1000 // Test: 1 minute. Passer à 3 * 60 * 60 * 1000 après validation.
+let idleLogoutTimer = null
+let idleLogoutEnabled = false
 
 function hostRef(hostname) {
   const h = allHosts.find(x => x.hostname === hostname)
@@ -1840,6 +1843,30 @@ function hostRef(hostname) {
 function basketHosts() {
   return [...basket].map(hostRef)
 }
+
+function resetIdleLogoutTimer() {
+  if (!idleLogoutEnabled) return
+  clearTimeout(idleLogoutTimer)
+  idleLogoutTimer = setTimeout(() => {
+    showNotif('⏱', 'Déconnexion automatique pour inactivité.')
+    logout()
+  }, IDLE_LOGOUT_MS)
+}
+
+function startIdleLogout() {
+  idleLogoutEnabled = true
+  resetIdleLogoutTimer()
+}
+
+function stopIdleLogout() {
+  idleLogoutEnabled = false
+  clearTimeout(idleLogoutTimer)
+  idleLogoutTimer = null
+}
+
+;['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(evt => {
+  window.addEventListener(evt, resetIdleLogoutTimer, { passive: true })
+})
 
 function loadUiLayoutPrefs() {
   try { return JSON.parse(localStorage.getItem(UI_LAYOUT_KEY) || '{}') || {} }
@@ -3657,7 +3684,7 @@ function renderHostRow(h) {
       <button class="hbtn" title="Bureau à distance" onclick="event.stopPropagation();openRdp('${ip}','${hn}')"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg></button>
       <button class="hbtn" title="Terminal PowerShell" onclick="event.stopPropagation();openPs('${hn}','${ip}')"><svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button>
       <button class="hbtn" title="Explorer les fichiers" onclick="event.stopPropagation();openFileExplorer([{hostname:'${hn}',ip:'${ip}'}],document.getElementById('inp-user').value,document.getElementById('inp-pass').value)"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
-      <button class="hbtn" title="Éditeur de registre" onclick="event.stopPropagation();openRegistry('${hn}',document.getElementById('inp-user').value,document.getElementById('inp-pass').value)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v6M14 17.5h6"/></svg></button>
+      <button class="hbtn" title="Éditeur de registre" onclick="event.stopPropagation();openRegistry('${hn}','${ip}',document.getElementById('inp-user').value,document.getElementById('inp-pass').value)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v6M14 17.5h6"/></svg></button>
       <button class="hbtn" title="Session utilisateur" onclick="event.stopPropagation();hostAction('session','${hn}','${ip}')"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
       <button class="hbtn" title="Envoyer un message" onclick="event.stopPropagation();openMsg('${hn}','${ip}')"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
       <button class="hbtn" title="Détail inventaire" onclick="event.stopPropagation();openDetail('${hn}')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
@@ -5213,6 +5240,7 @@ applyTheme(localStorage.getItem('psm-theme') || 'light')
 // ══ REGISTRE ══════════════════════════════════════════════════════════════════
 
 let _regHostname = ''
+let _regIp = ''
 let _regUsername = ''
 let _regPassword = ''
 let _regCurrentKey = ''
@@ -5228,9 +5256,10 @@ const REG_FIXED  = {
   'HKEY_CURRENT_CONFIG': ['Software','System']
 }
 
-function openRegistry(hostname, username, password) {
+function openRegistry(hostname, ip, username, password) {
   if (!username || !password) { showAlert('Identifiants WinRM requis.'); return }
   _regHostname = hostname
+  _regIp = ip || ''
   _regUsername = username
   _regPassword = password
   _regCurrentKey = ''
@@ -5284,7 +5313,7 @@ async function regSelectKey(keyPath) {
   try {
     const r    = await fetch('/api/reg-list', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname: _regHostname, username: _regUsername, password: _regPassword, keyPath })
+      body: JSON.stringify({ hostname: _regHostname, ip: _regIp, username: _regUsername, password: _regPassword, keyPath })
     })
     const data = await r.json()
 
@@ -5410,7 +5439,7 @@ async function regSaveValue() {
   try {
     const r    = await fetch('/api/reg-set', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname: _regHostname, username: _regUsername, password: _regPassword, keyPath: _regCurrentKey, name, kind, value })
+      body: JSON.stringify({ hostname: _regHostname, ip: _regIp, username: _regUsername, password: _regPassword, keyPath: _regCurrentKey, name, kind, value })
     })
     const data = await r.json()
     if (!data.ok) { document.getElementById('reg-edit-status').textContent = '✖ ' + data.error; return }
@@ -5435,7 +5464,7 @@ async function regNewKeyConfirm() {
   try {
     const r    = await fetch('/api/reg-create-key', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname: _regHostname, username: _regUsername, password: _regPassword, keyPath: _regCurrentKey + '\\' + name })
+      body: JSON.stringify({ hostname: _regHostname, ip: _regIp, username: _regUsername, password: _regPassword, keyPath: _regCurrentKey + '\\' + name })
     })
     const data = await r.json()
     if (!data.ok) { document.getElementById('reg-newkey-status').textContent = '✖ ' + data.error; return }
@@ -5454,7 +5483,7 @@ async function regConfirmDeleteValue(name) {
       try {
         const r    = await fetch('/api/reg-delete-value', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hostname: _regHostname, username: _regUsername, password: _regPassword, keyPath: _regCurrentKey, name })
+          body: JSON.stringify({ hostname: _regHostname, ip: _regIp, username: _regUsername, password: _regPassword, keyPath: _regCurrentKey, name })
         })
         const data = await r.json()
         if (!data.ok) return regSetStatus('✖ ' + data.error)
@@ -5475,7 +5504,7 @@ async function regDeleteKey() {
       try {
         const r    = await fetch('/api/reg-delete-key', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hostname: _regHostname, username: _regUsername, password: _regPassword, keyPath: _regCurrentKey })
+          body: JSON.stringify({ hostname: _regHostname, ip: _regIp, username: _regUsername, password: _regPassword, keyPath: _regCurrentKey })
         })
         const data = await r.json()
         if (!data.ok) return regSetStatus('✖ ' + data.error)
@@ -5501,6 +5530,7 @@ function regShowConfirm(title, message, btnLabel, btnColor, onConfirm) {
 }
 
 function logout() {
+  stopIdleLogout()
   fetch('/api/logout', { method: 'POST' }).catch(() => {})
   document.getElementById('inp-user').value = ''
   document.getElementById('inp-pass').value = ''
@@ -5606,6 +5636,7 @@ async function splashLogin() {
 function splashReveal(user, pass) {
   document.getElementById('inp-user').value = user
   document.getElementById('inp-pass').value = pass
+  startIdleLogout()
   const splash = document.getElementById('splash')
   splash.style.transition = 'transform .7s cubic-bezier(.4,0,.2,1)'
   splash.style.transformOrigin = 'top'
@@ -5802,7 +5833,7 @@ async function runLoginHistory() {
     if (!basket.size) return showAlert('Sélectionnez au moins un poste.')
 
     const months  = parseInt(document.getElementById('sel-history-months').value) || 6
-    const targets = [...basket]
+    const targets = basketHosts()
     _historyData  = []
 
     const body = document.getElementById('history-modal-body')
@@ -5810,10 +5841,11 @@ async function runLoginHistory() {
     body.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:12px 0;">⏳ Interrogation de ${targets.length} poste(s)…</div>`
     document.getElementById('history-modal').style.display = 'flex'
 
-    for (const hn of targets) {
+    for (const target of targets) {
+        const hn = target.hostname
         body.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:12px 0;">⏳ ${escHtml(hn)}…</div>`
         try {
-            const r    = await fetch('/api/login-history', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target: hn, username, password, months }) })
+            const r    = await fetch('/api/login-history', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target: hn, ip: target.ip || '', username, password, months }) })
             const data = await r.json()
             _historyData.push({ hostname: hn, items: data.ok ? data.items : [], error: data.ok ? null : data.error })
         } catch(e) {
