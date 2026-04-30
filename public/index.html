@@ -1831,7 +1831,7 @@ let groupVars  = {}
 let hostStatus = {}
 const UI_LAYOUT_KEY = 'psm-ui-layout-v1'
 const DEFAULT_UI_MODULE_ORDER = ['credentials', 'script', 'throttle', 'actions', 'schedule', 'power', 'parc']
-const IDLE_LOGOUT_MS = 60 * 1000 // Test: 1 minute. Passer à 3 * 60 * 60 * 1000 après validation.
+const IDLE_LOGOUT_MS = 60 * 60 * 1000
 let idleLogoutTimer = null
 let idleLogoutEnabled = false
 
