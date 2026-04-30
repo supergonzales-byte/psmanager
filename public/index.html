@@ -437,14 +437,30 @@ header {
 .hdr-stat span { color:#90caf9; font-weight:600; }
 
 /* ─── LAYOUT ─── */
-.layout { display:grid; grid-template-columns:300px 1fr 320px; flex:1; overflow:hidden; }
+.layout { display:grid; grid-template-columns:300px 1fr 320px; grid-template-areas:"config main selection"; flex:1; overflow:hidden; }
 
 /* ─── PANNEAU GAUCHE ─── */
-.pane-left { background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
+.pane-left { grid-area:config; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; }
 .pane-left::-webkit-scrollbar { width:4px; }
 .pane-left::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
 
 .section-title { padding:9px 16px; font-family:var(--mono); font-size:9px; font-weight:600; color:var(--accent); letter-spacing:.2em; text-transform:uppercase; border-bottom:1px solid var(--border); background:var(--brown-l); }
+.section-title.config-title { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.section-title.config-title[draggable="true"] { cursor:grab; user-select:none; }
+.section-title.config-title[draggable="true"]:active { cursor:grabbing; }
+.ui-layout-tools { display:flex; align-items:center; gap:5px; letter-spacing:0; text-transform:none; }
+.ui-layout-btn { width:24px; height:24px; border-radius:6px; border:1.5px solid var(--border); background:var(--surface); color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; line-height:1; transition:all .15s; }
+.ui-layout-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-l2); }
+.ui-module { position:relative; }
+.ui-module .card-title { display:flex; align-items:center; gap:6px; cursor:grab; user-select:none; }
+.ui-module .card-title:active { cursor:grabbing; }
+.ui-drag-grip { color:var(--muted); font-size:12px; letter-spacing:0; line-height:1; opacity:.75; }
+.ui-module.dragging { opacity:.45; }
+.ui-module.drag-over { outline:2px dashed var(--accent); outline-offset:2px; }
+.layout.selection-left { grid-template-columns:320px 1fr 300px; grid-template-areas:"selection main config"; }
+.layout.selection-left .pane-right { border-left:none; border-right:1px solid var(--border); }
+.layout.selection-left .pane-center { }
+.layout.selection-left .pane-left { border-right:none; border-left:1px solid var(--border); }
 
 .config-card { margin:10px 10px; background:var(--card2); border:1px solid var(--border); border-radius:8px; padding:13px 14px; box-shadow:var(--shadow); transition:box-shadow .2s; }
 .config-card:hover { box-shadow:var(--shadow2); }
@@ -488,7 +504,7 @@ header {
 .tb-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
 
 /* ─── SELECTOR ─── */
-.pane-center { display:flex; flex-direction:column; overflow:hidden; background:var(--bg); }
+.pane-center { grid-area:main; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); }
 .selector-scroll { flex:1; overflow-y:auto; padding:10px; }
 .selector-scroll::-webkit-scrollbar { width:4px; }
 .selector-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
@@ -614,8 +630,10 @@ header {
 .empty-state p { font-size:13px; }
 
 /* ─── PANIER ─── */
-.pane-right { background:var(--panel); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+.pane-right { grid-area:selection; background:var(--panel); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
 .basket-header { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; background:linear-gradient(90deg, var(--brown-l), var(--panel)); }
+.basket-header[draggable="true"] { cursor:grab; user-select:none; }
+.basket-header[draggable="true"]:active { cursor:grabbing; }
 .basket-title { font-family:var(--sans); font-size:14px; font-weight:700; color:var(--text); }
 .basket-count { font-family:var(--sans); font-size:10px; color:var(--accent); background:var(--accent-l); padding:3px 10px; border-radius:10px; border:1px solid var(--accent-border); font-weight:600; }
 .basket-scroll { flex:1; overflow-y:auto; padding:8px 10px; }
@@ -1532,10 +1550,16 @@ header {
 
   <!-- ── PANNEAU GAUCHE ── -->
   <div class="pane-left">
-    <div class="section-title">⚙ Configuration</div>
+    <div class="section-title config-title" draggable="true" title="Glisser pour déplacer la colonne configuration">
+      <span>⚙ Configuration</span>
+      <span class="ui-layout-tools">
+        <button class="ui-layout-btn" onclick="toggleColumnLayout()" title="Inverser configuration et sélection">⇄</button>
+        <button class="ui-layout-btn" onclick="resetUiLayout()" title="Réinitialiser l'interface">↺</button>
+      </span>
+    </div>
 
     <!-- Identifiants -->
-    <div class="config-card">
+    <div class="config-card ui-module" data-ui-module="credentials">
       <div class="card-title">🔐 IDENTIFIANTS</div>
       <div class="field">
         <label>Utilisateur</label>
@@ -1548,7 +1572,7 @@ header {
     </div>
 
     <!-- Script -->
-    <div class="config-card">
+    <div class="config-card ui-module" data-ui-module="script">
       <div class="card-title">📜 SCRIPT POWERSHELL</div>
       <div class="field" style="display:flex;gap:6px;align-items:center;">
         <select id="sel-script" style="display:none;"></select>
@@ -1559,10 +1583,20 @@ header {
         </button>
         <input type="file" id="inp-script-upload" accept=".ps1" style="display:none;" onchange="uploadScript(this)">
       </div>
+
+      <button class="btn btn-primary" id="btn-run" onclick="runScript()" style="margin-top:8px;">▶  Lancer le script</button>
+
+      <div class="prog-wrap" id="prog-wrap" style="display:none;margin-top:10px;padding:0;border-bottom:none;">
+        <div class="prog-label">
+          <span id="prog-text">En cours...</span>
+          <span id="prog-pct">0%</span>
+        </div>
+        <div class="prog-bar-bg"><div class="prog-bar-fill" id="prog-fill" style="width:0%"></div></div>
+      </div>
     </div>
 
     <!-- Parallélisme -->
-    <div class="config-card">
+    <div class="config-card ui-module" data-ui-module="throttle">
       <div class="card-title">⚡ PARALLÉLISME</div>
       <div class="throttle-row">
         <label>Postes simultanés :</label>
@@ -1570,23 +1604,9 @@ header {
       </div>
     </div>
 
-    <!-- Bouton lancer -->
-    <div style="padding:10px 12px 4px;">
-      <button class="btn btn-primary" id="btn-run" onclick="runScript()">▶  Lancer le script</button>
-    </div>
-
-    <!-- Progress -->
-    <div class="prog-wrap" id="prog-wrap" style="display:none;">
-      <div class="prog-label">
-        <span id="prog-text">En cours...</span>
-        <span id="prog-pct">0%</span>
-      </div>
-      <div class="prog-bar-bg"><div class="prog-bar-fill" id="prog-fill" style="width:0%"></div></div>
-    </div>
-
     <!-- Alimentation -->
     <!-- Autres actions -->
-    <div class="config-card" style="margin-top:8px;" id="card-autres-actions">
+    <div class="config-card ui-module" data-ui-module="actions" style="margin-top:8px;" id="card-autres-actions">
       <div class="card-title">🛠️ AUTRES ACTIONS</div>
 
       <div class="field">
@@ -1657,13 +1677,13 @@ header {
     </div>
 
     <!-- Planification -->
-    <div class="config-card" style="margin-top:8px;">
+    <div class="config-card ui-module" data-ui-module="schedule" style="margin-top:8px;">
       <div class="card-title">📅 PLANIFICATION</div>
       <button class="btn btn-outline" onclick="openSchedModal()" style="width:100%;margin-top:6px;">📅 Configurer une tâche…</button>
       <button class="btn btn-outline" onclick="openSchedList()" style="width:100%;margin-top:6px;font-size:11px;color:var(--muted);">📋 Voir les tâches planifiées</button>
     </div>
 
-    <div class="config-card" style="margin-top:8px;">
+    <div class="config-card ui-module" data-ui-module="power" style="margin-top:8px;">
       <div class="card-title">⚡ ALIMENTATION</div>
       <div class="pwr-grid">
         <button class="pwr-btn pwr-wol" onclick="wolBasket()" title="Wake-on-LAN la sélection">
@@ -1698,7 +1718,7 @@ header {
     </div>
 
     <!-- Fichier parc -->
-    <div class="config-card">
+    <div class="config-card ui-module" data-ui-module="parc">
       <div class="card-title">📁 FICHIER PARC</div>
       <div class="field">
         <label>Chemin parc.txt</label>
@@ -1728,7 +1748,7 @@ header {
 
   <!-- ── PANNEAU DROIT ── -->
   <div class="pane-right">
-    <div class="basket-header">
+    <div class="basket-header" draggable="true" title="Glisser pour déplacer la colonne de sélection">
       <span class="basket-title">✅ Sélection</span>
       <span class="basket-count" id="basket-count">0 poste(s)</span>
     </div>
@@ -1809,6 +1829,8 @@ let allHosts   = []
 let basket     = new Set()
 let groupVars  = {}
 let hostStatus = {}
+const UI_LAYOUT_KEY = 'psm-ui-layout-v1'
+const DEFAULT_UI_MODULE_ORDER = ['credentials', 'script', 'throttle', 'actions', 'schedule', 'power', 'parc']
 
 function hostRef(hostname) {
   const h = allHosts.find(x => x.hostname === hostname)
@@ -1817,6 +1839,137 @@ function hostRef(hostname) {
 
 function basketHosts() {
   return [...basket].map(hostRef)
+}
+
+function loadUiLayoutPrefs() {
+  try { return JSON.parse(localStorage.getItem(UI_LAYOUT_KEY) || '{}') || {} }
+  catch { return {} }
+}
+
+function saveUiLayoutPrefs(prefs) {
+  localStorage.setItem(UI_LAYOUT_KEY, JSON.stringify(prefs))
+}
+
+function applyUiLayout() {
+  const prefs = loadUiLayoutPrefs()
+  const layout = document.querySelector('.layout')
+  if (layout) layout.classList.toggle('selection-left', prefs.columns === 'selection-left')
+
+  applyUiModuleOrder(Array.isArray(prefs.modules) ? prefs.modules : DEFAULT_UI_MODULE_ORDER)
+}
+
+function applyUiModuleOrder(order) {
+  const pane = document.querySelector('.pane-left')
+  if (!pane || !Array.isArray(order)) return
+  const byId = new Map([...pane.querySelectorAll('.ui-module[data-ui-module]')].map(el => [el.dataset.uiModule, el]))
+  let after = pane.querySelector('.config-title')
+  order.forEach(id => {
+    const el = byId.get(id)
+    if (!el) return
+    if (after) {
+      pane.insertBefore(el, after.nextSibling)
+      after = el
+    } else {
+      pane.appendChild(el)
+    }
+  })
+}
+
+function persistUiLayout() {
+  const layout = document.querySelector('.layout')
+  const modules = [...document.querySelectorAll('.pane-left .ui-module[data-ui-module]')]
+    .map(el => el.dataset.uiModule)
+  saveUiLayoutPrefs({
+    columns: layout?.classList.contains('selection-left') ? 'selection-left' : 'default',
+    modules
+  })
+}
+
+function toggleColumnLayout() {
+  document.querySelector('.layout')?.classList.toggle('selection-left')
+  persistUiLayout()
+}
+
+function resetUiLayout() {
+  localStorage.removeItem(UI_LAYOUT_KEY)
+  document.querySelector('.layout')?.classList.remove('selection-left')
+  applyUiModuleOrder(DEFAULT_UI_MODULE_ORDER)
+  persistUiLayout()
+}
+
+function initColumnDrag() {
+  const configHeader = document.querySelector('.config-title')
+  const basketHeader = document.querySelector('.basket-header')
+  const layout = document.querySelector('.layout')
+  if (!layout) return
+
+  const bindColumnHandle = (handle, column) => {
+    if (!handle) return
+    handle.addEventListener('dragstart', e => {
+      if (e.target.closest('button')) { e.preventDefault(); return }
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('application/x-psm-column', column)
+    })
+  }
+
+  bindColumnHandle(configHeader, 'config')
+  bindColumnHandle(basketHeader, 'selection')
+
+  layout.addEventListener('dragover', e => {
+    if (!Array.from(e.dataTransfer.types || []).includes('application/x-psm-column')) return
+    e.preventDefault()
+  })
+
+  layout.addEventListener('drop', e => {
+    const column = e.dataTransfer.getData('application/x-psm-column')
+    if (!column) return
+    e.preventDefault()
+    const rect = layout.getBoundingClientRect()
+    const dropLeft = e.clientX < rect.left + rect.width / 2
+    layout.classList.toggle('selection-left', column === 'selection' ? dropLeft : !dropLeft)
+    persistUiLayout()
+  })
+}
+
+function initUiModules() {
+  const modules = [...document.querySelectorAll('.pane-left .ui-module[data-ui-module]')]
+  modules.forEach(module => {
+    const title = module.querySelector('.card-title')
+    if (title && !title.querySelector('.ui-drag-grip')) {
+      const grip = document.createElement('span')
+      grip.className = 'ui-drag-grip'
+      grip.textContent = '☰'
+      title.prepend(grip)
+    }
+    if (title) title.draggable = true
+
+    title?.addEventListener('dragstart', e => {
+      module.classList.add('dragging')
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('application/x-psm-module', module.dataset.uiModule)
+    })
+    title?.addEventListener('dragend', () => {
+      module.classList.remove('dragging')
+      modules.forEach(m => m.classList.remove('drag-over'))
+      persistUiLayout()
+    })
+    module.addEventListener('dragover', e => {
+      if (!Array.from(e.dataTransfer.types || []).includes('application/x-psm-module')) return
+      e.preventDefault()
+      const dragging = document.querySelector('.pane-left .dragging')
+      if (!dragging || dragging === module) return
+      module.classList.add('drag-over')
+      const rect = module.getBoundingClientRect()
+      const after = e.clientY > rect.top + rect.height / 2
+      module.parentNode.insertBefore(dragging, after ? module.nextSibling : module)
+    })
+    module.addEventListener('dragleave', () => module.classList.remove('drag-over'))
+    module.addEventListener('drop', e => {
+      e.preventDefault()
+      module.classList.remove('drag-over')
+      persistUiLayout()
+    })
+  })
 }
 
 function updateOnlineCount() {
@@ -5469,6 +5622,9 @@ applyTheme(localStorage.getItem('psm-theme') || 'light')
 
 // Toujours afficher le formulaire de connexion au chargement
 window.addEventListener('DOMContentLoaded', () => {
+  applyUiLayout()
+  initUiModules()
+  initColumnDrag()
   document.getElementById('splash-user').focus()
 })
 
