@@ -302,7 +302,7 @@ public class PsmVeyonSSL : ICertificatePolicy {
             // Arrêt immédiat si credentials invalides — évite de verrouiller le compte AD
             if (result.error && result.error.startsWith('ERR_AUTH')) authFailed = true
             send('result', { done, total, ok: okCount, err: errCount,
-                hostname, success: result.ok, output: result.output || '', error: result.error || '' })
+                hostname: result.hostname, success: result.ok, output: result.output || '', error: result.error || '' })
         }
     }
 

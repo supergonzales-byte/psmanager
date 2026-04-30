@@ -148,7 +148,7 @@ try { ${psCmd(hostname)}; Write-Output "OK" } catch { Write-Output "ERROR|$($_.E
             const result   = await runOne(targetInfo)
             done++
             if (result.ok) okCount++; else errCount++
-            send('result', { done, total, ok: okCount, err: errCount, hostname, success: result.ok, error: result.error })
+            send('result', { done, total, ok: okCount, err: errCount, hostname: result.hostname, success: result.ok, error: result.error })
         }
     }
 

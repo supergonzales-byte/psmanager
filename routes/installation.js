@@ -169,7 +169,7 @@ public class PsmTrustAll : ICertificatePolicy {
             if (result.ok) okCount++; else errCount++
             if (result.error && result.error.startsWith('ERR_AUTH')) authFailed = true
             send('result', { done, total, ok: okCount, err: errCount,
-                hostname, success: result.ok, output: result.output || '', error: result.error || '' })
+                hostname: result.hostname, success: result.ok, output: result.output || '', error: result.error || '' })
         }
     }
 
